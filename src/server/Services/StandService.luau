@@ -1,14 +1,13 @@
 --!strict
 -- Assigns donation stands to players and wires up their ProximityPrompts.
 --
--- BUILDER CONTRACT (for whoever builds the physical stands in Studio, since I can't
--- place 3D geometry): tag each stand Model with the CollectionService tag
--- "DonationStand". Each tagged model must contain a ProximityPrompt named
--- "DonatePrompt" somewhere in its descendants. This script will set two attributes on
--- the Model that a separate (builder-owned) visual script can read to swap
--- meshes/materials per tier:
---   OwnerUserId: number   -- 0 while unclaimed
---   Tier: number          -- 1+, follows the owner's rank order (see RankConfig)
+-- Stands are currently generated procedurally by WorldBuilderService.luau. Each tagged
+-- Model ("DonationStand" tag) is expected to contain: a "Podium" BasePart (recolored per
+-- rank tier), a ProximityPrompt named "DonatePrompt" (on the Podium), and a "SignPost"
+-- part with a BillboardGui named "Sign" containing a TextLabel named "OwnerLabel". If
+-- this gets replaced with real 3D art in Studio, keep those same child names so this
+-- script's visual updates keep working - or update findPrompt/updateStandVisual below to
+-- match whatever new structure is used.
 
 local CollectionService = game:GetService("CollectionService")
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -33,6 +32,26 @@ local function findPrompt(stand: Model): ProximityPrompt?
 	return stand:FindFirstChildWhichIsA("ProximityPrompt", true)
 end
 
+local function updateStandVisual(stand: Model, ownerName: string?, tierOrder: number)
+	local prompt = findPrompt(stand)
+	if prompt then
+		prompt.ObjectText = ownerName or "Empty Stand"
+	end
+
+	local podium = stand:FindFirstChild("Podium") :: BasePart?
+	if podium then
+		local rank = RankConfig.Ranks[math.clamp(tierOrder, 1, #RankConfig.Ranks)]
+		podium.Color = rank.color
+	end
+
+	local signPost = stand:FindFirstChild("SignPost")
+	local billboard = signPost and signPost:FindFirstChild("Sign")
+	local ownerLabel = billboard and billboard:FindFirstChild("OwnerLabel") :: TextLabel?
+	if ownerLabel then
+		ownerLabel.Text = ownerName or "Empty Stand"
+	end
+end
+
 local function getUnclaimedStand(): Model?
 	for _, instance in CollectionService:GetTagged(STAND_TAG) do
 		if instance:IsA("Model") and (instance:GetAttribute("OwnerUserId") or 0) == 0 then
@@ -53,7 +72,9 @@ local function assignStand(player: Player)
 	stand:SetAttribute("OwnerName", player.Name)
 
 	local rank = XPService.getRank(player)
-	stand:SetAttribute("Tier", rank and rank.order or 1)
+	local tierOrder = rank and rank.order or 1
+	stand:SetAttribute("Tier", tierOrder)
+	updateStandVisual(stand, player.Name, tierOrder)
 
 	standByOwner[player] = stand
 end
@@ -64,6 +85,7 @@ local function releaseStand(player: Player)
 		stand:SetAttribute("OwnerUserId", 0)
 		stand:SetAttribute("OwnerName", "")
 		stand:SetAttribute("Tier", 1)
+		updateStandVisual(stand, nil, 1)
 		standByOwner[player] = nil
 	end
 end
@@ -146,6 +168,7 @@ function StandService.start()
 		local stand = standByOwner[player]
 		if stand then
 			stand:SetAttribute("Tier", newRank.order)
+			updateStandVisual(stand, player.Name, newRank.order)
 		end
 	end)
 end

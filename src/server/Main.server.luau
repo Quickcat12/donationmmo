@@ -11,6 +11,7 @@ Net.bootstrap()
 
 local Services = script.Parent.Services
 
+local WorldBuilderService = require(Services.WorldBuilderService)
 local XPService = require(Services.XPService)
 local StandService = require(Services.StandService)
 local DonationService = require(Services.DonationService)
@@ -20,6 +21,9 @@ local QuestService = require(Services.QuestService)
 local ObbyService = require(Services.ObbyService)
 local LeaderboardService = require(Services.LeaderboardService)
 local PlayerDataService = require(Services.PlayerDataService)
+
+-- Must run before StandService.start(), which scans for already-placed stands.
+WorldBuilderService.build()
 
 XPService.start()
 StandService.start()
