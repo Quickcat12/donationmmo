@@ -1,0 +1,5 @@
+.DS_Store
+*.rbxl
+*.rbxlx
+sourcemap.json
+.vscode/*.log
