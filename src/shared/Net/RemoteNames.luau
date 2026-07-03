@@ -6,8 +6,11 @@ export type RemoteName =
 	"XpChanged"
 	| "RankUp"
 	| "OpenDonationMenu"
-	| "RequestDonate"
+	| "ReportGamepassDonation"
 	| "DonationReceived"
+	| "RequestSetDonationGamepass"
+	| "SetDonationGamepassResult"
+	| "RequestBuyXp"
 	| "RequestWorldTravel"
 	| "WorldTravelDenied"
 	| "QuestsUpdated"
@@ -18,9 +21,12 @@ local RemoteNames = {
 	Events = {
 		XpChanged = "XpChanged", -- server -> client, fires whenever a player's XP changes
 		RankUp = "RankUp", -- server -> client, fires on rank promotion (for celebration UI)
-		OpenDonationMenu = "OpenDonationMenu", -- server -> client, tells the donor's client to open the amount picker for a given receiver
-		RequestDonate = "RequestDonate", -- client -> server, player confirms a donation amount at a stand
+		OpenDonationMenu = "OpenDonationMenu", -- server -> client, tells the donor's client to open the gamepass picker for a given stand owner
+		ReportGamepassDonation = "ReportGamepassDonation", -- client -> server, "I just bought this gamepass from this receiver" (server re-verifies via UserOwnsGamePassAsync before granting anything)
 		DonationReceived = "DonationReceived", -- server -> client, notifies receiver of an incoming donation
+		RequestSetDonationGamepass = "RequestSetDonationGamepass", -- client -> server, player links one of their own Gamepasses to their stand
+		SetDonationGamepassResult = "SetDonationGamepassResult", -- server -> client, success/failure feedback for the above
+		RequestBuyXp = "RequestBuyXp", -- client -> server, player wants to prompt purchase of a game-owned XP shop Developer Product
 		RequestWorldTravel = "RequestWorldTravel", -- client -> server, player requests to teleport to a world
 		WorldTravelDenied = "WorldTravelDenied", -- server -> client, travel request rejected (rank too low)
 		QuestsUpdated = "QuestsUpdated", -- server -> client, quest list/progress changed

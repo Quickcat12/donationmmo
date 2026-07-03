@@ -1,8 +1,14 @@
 --!strict
 
+export type DonationGamepass = {
+	gamepassId: number, -- a Gamepass the player created and owns on creator.roblox.com
+	slot: number, -- display order (1-based)
+}
+
 export type StandData = {
 	tier: number, -- upgrades as rank increases
 	totalReceived: number, -- lifetime Robux received via this stand
+	donationGamepasses: { DonationGamepass }, -- player-owned Gamepasses linked to this stand for donations
 }
 
 export type CosmeticData = {
@@ -43,6 +49,7 @@ PlayerDataSchema.Default = {
 	stand = {
 		tier = 1,
 		totalReceived = 0,
+		donationGamepasses = {},
 	},
 	cosmetics = {
 		ownedTitles = {},

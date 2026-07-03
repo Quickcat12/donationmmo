@@ -11,6 +11,7 @@
 --   Tier: number          -- 1+, follows the owner's rank order (see RankConfig)
 
 local CollectionService = game:GetService("CollectionService")
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -82,9 +83,36 @@ local function onPromptTriggered(prompt: ProximityPrompt, donorPlayer: Player)
 		return -- can't donate to your own stand
 	end
 
-	-- Hands off to the client to open the donation amount picker UI; the client then
-	-- fires RequestDonate with the chosen tier's productId once the player confirms.
-	Net.get(RemoteNames.Events.OpenDonationMenu):FireClient(donorPlayer, ownerUserId, stand:GetAttribute("OwnerName"))
+	local owner = Players:GetPlayerByUserId(ownerUserId)
+	local ownerProfile = owner and PlayerDataService.get(owner)
+	if not owner or not ownerProfile then
+		return
+	end
+
+	-- Fetch live name/price/icon for each of the owner's linked Gamepasses so the donor's
+	-- client can render an up-to-date picker without trusting stale cached data.
+	local gamepasses = {}
+	for _, entry in ownerProfile.stand.donationGamepasses do
+		local ok, info = pcall(function()
+			return MarketplaceService:GetProductInfo(entry.gamepassId, Enum.InfoType.GamePass)
+		end)
+		if ok and info and info.IsForSale then
+			table.insert(gamepasses, {
+				gamepassId = entry.gamepassId,
+				slot = entry.slot,
+				name = info.Name,
+				price = info.PriceInRobux,
+			})
+		end
+	end
+
+	table.sort(gamepasses, function(a, b)
+		return a.slot < b.slot
+	end)
+
+	-- Hands off to the client to open the gamepass picker UI; the client prompts the
+	-- purchase directly and then fires ReportGamepassDonation once it completes.
+	Net.get(RemoteNames.Events.OpenDonationMenu):FireClient(donorPlayer, ownerUserId, stand:GetAttribute("OwnerName"), gamepasses)
 end
 
 local function hookStand(stand: Instance)

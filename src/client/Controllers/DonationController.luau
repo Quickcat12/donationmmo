@@ -1,13 +1,18 @@
 --!strict
--- Donation amount picker (opened by the server when a player triggers a stand's
+-- Donation Gamepass picker (opened by the server when a player triggers a stand's
 -- ProximityPrompt) and incoming-donation toast notifications.
+--
+-- Buying a donation means directly purchasing the RECEIVER's own Gamepass via
+-- MarketplaceService:PromptGamePassPurchase, so Robux goes straight to them. The client
+-- reports completed purchases to the server, which re-verifies via
+-- UserOwnsGamePassAsync before granting any reward (see DonationService.luau).
 
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local DonationConfig = require(Shared.Config.DonationConfig)
 local Net = require(Shared.Net.Net)
 local RemoteNames = require(Shared.Net.RemoteNames)
 local UICreate = require(Shared.Util.UICreate)
@@ -15,7 +20,14 @@ local Theme = require(Shared.Util.Theme)
 
 local player = Players.LocalPlayer
 
+type GamepassEntry = { gamepassId: number, slot: number, name: string, price: number }
+
 local DonationController = {}
+
+-- Tracks which receiver a given Gamepass purchase prompt was for, so we know who to
+-- credit when PromptGamePassPurchaseFinished fires (that event doesn't carry the
+-- receiver's identity itself).
+local pendingReceiverByGamepass: { [number]: number } = {}
 
 local function getHud(): ScreenGui
 	local playerGui = player:WaitForChild("PlayerGui")
@@ -23,17 +35,20 @@ local function getHud(): ScreenGui
 		or (UICreate("ScreenGui", { Name = "HUD", ResetOnSpawn = false, Parent = playerGui }) :: ScreenGui)
 end
 
-local function openDonationMenu(receiverUserId: number, receiverName: string)
+local function openDonationMenu(receiverUserId: number, receiverName: string, gamepasses: { GamepassEntry })
 	local hud = getHud()
 	local existing = hud:FindFirstChild("DonationMenu")
 	if existing then
 		existing:Destroy()
 	end
 
-	local requestEvent = Net.get(RemoteNames.Events.RequestDonate)
+	if #gamepasses == 0 then
+		return
+	end
+
 	local buttonHeight = 42
 	local buttonSpacing = 8
-	local listHeight = (#DonationConfig.Tiers * (buttonHeight + buttonSpacing))
+	local listHeight = (#gamepasses * (buttonHeight + buttonSpacing))
 
 	local menu = UICreate("Frame", {
 		Name = "DonationMenu",
@@ -67,11 +82,11 @@ local function openDonationMenu(receiverUserId: number, receiverName: string)
 		}),
 	})
 
-	for _, tier in DonationConfig.Tiers do
+	for _, gamepass in gamepasses do
 		local button = UICreate("TextButton", {
 			Size = UDim2.new(1, 0, 0, buttonHeight),
 			BackgroundColor3 = Theme.PanelLight,
-			Text = `{tier.robuxPrice} Robux  (+{tier.donorXp} XP)`,
+			Text = `{gamepass.price} Robux - {gamepass.name}`,
 			Font = Theme.FontRegular,
 			TextSize = 16,
 			TextColor3 = Theme.TextPrimary,
@@ -80,7 +95,8 @@ local function openDonationMenu(receiverUserId: number, receiverName: string)
 		}, { UICreate("UICorner", { CornerRadius = UDim.new(0, 8) }) }) :: TextButton
 
 		button.MouseButton1Click:Connect(function()
-			requestEvent:FireServer(receiverUserId, tier.productId)
+			pendingReceiverByGamepass[gamepass.gamepassId] = receiverUserId
+			MarketplaceService:PromptGamePassPurchase(player, gamepass.gamepassId)
 			menu:Destroy()
 		end)
 	end
@@ -131,6 +147,21 @@ end
 function DonationController.start()
 	Net.get(RemoteNames.Events.OpenDonationMenu).OnClientEvent:Connect(openDonationMenu)
 	Net.get(RemoteNames.Events.DonationReceived).OnClientEvent:Connect(showDonationToast)
+
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(purchasingPlayer, gamePassId, wasPurchased)
+		if purchasingPlayer ~= player or not wasPurchased then
+			pendingReceiverByGamepass[gamePassId] = nil
+			return
+		end
+
+		local receiverUserId = pendingReceiverByGamepass[gamePassId]
+		pendingReceiverByGamepass[gamePassId] = nil
+		if not receiverUserId then
+			return
+		end
+
+		Net.get(RemoteNames.Events.ReportGamepassDonation):FireServer(receiverUserId, gamePassId)
+	end)
 end
 
 return DonationController

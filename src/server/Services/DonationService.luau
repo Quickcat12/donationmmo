@@ -1,32 +1,20 @@
 --!strict
--- Handles the donation purchase flow: a donor prompts a Robux purchase (Developer
--- Product) intended for a specific receiver standing at a stand. Grants XP to both
--- sides and records donation stats.
+-- Donations happen via player-owned Gamepasses: each player creates their own Gamepass(es)
+-- on creator.roblox.com at whatever price they want, then links the Gamepass ID to their
+-- stand here. Other players buy that Gamepass directly via
+-- MarketplaceService:PromptGamePassPurchase, so Robux goes straight to the receiver's
+-- account - no Group Payout workaround needed, unlike a Developer-Product-based design.
 --
--- IMPORTANT ROBLOX PLATFORM LIMITATION (read before wiring up real products):
--- Roblox does not expose any scripting API that transfers real Robux from a Developer
--- Product purchase directly to another player. Revenue from a Developer Product always
--- goes to the experience's owner (you, or your group). There is no ProcessReceipt-time
--- "pay this other player" call.
---
--- The only Roblox-sanctioned way for donation *receivers* to actually receive Robux is
--- Group Payouts (Group > Configure > Payouts), which lets the group owner allocate a
--- percentage of group funds to members periodically. That is a manual/administrative
--- action on the group's Configure page, not something this script can trigger live.
---
--- So this service tracks `totalReceivedRobux` as a donation-credit STAT (drives XP,
--- rank progress, leaderboards, and stand tier) - it is not itself a Robux transfer.
--- If you want receivers to be paid out in real Robux, use that stat as the basis for
--- periodically configuring Group Payout percentages yourself; I cannot automate that
--- part since it's a group-ownership action outside of any script's reach.
+-- The server never trusts the client's claim that a purchase happened.
+-- ReportGamepassDonation is re-verified with MarketplaceService:UserOwnsGamePassAsync and
+-- cross-checked against the receiver's actually-configured gamepass list before any reward
+-- is granted.
 
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
-local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local DonationConfig = require(Shared.Config.DonationConfig)
 local Net = require(Shared.Net.Net)
 local RemoteNames = require(Shared.Net.RemoteNames)
 
@@ -36,110 +24,148 @@ local QuestService = require(script.Parent.QuestService)
 
 local DonationService = {}
 
--- Cross-server-safe record of "this donor intends this donation to go to this receiver",
--- written right before prompting the purchase and consumed in ProcessReceipt. A DataStore
--- (not a plain in-memory table) is used because ProcessReceipt can be retried by Roblox
--- on a different server if the original server crashes before confirming the receipt.
-local PendingDonationsStore = DataStoreService:GetDataStore("PendingDonations_v1")
+local MAX_GAMEPASS_SLOTS = 6
 
-local function setPendingReceiver(donorUserId: number, receiverUserId: number, productId: number)
-	local key = `{donorUserId}_{productId}`
-	local ok, err = pcall(function()
-		PendingDonationsStore:SetAsync(key, receiverUserId)
-	end)
-	if not ok then
-		warn(`[DonationService] Failed to record pending donation intent: {err}`)
+-- Donor XP scales with the live Robux price of whatever Gamepass they bought, so it works
+-- for any price a player sets on their own Gamepass (not a fixed set of tiers).
+local function computeDonorXp(robuxPrice: number): number
+	return math.floor(robuxPrice * 10 * (1 + robuxPrice / 2000))
+end
+
+local function removeSlot(donationGamepasses: { any }, slot: number)
+	for i = #donationGamepasses, 1, -1 do
+		if donationGamepasses[i].slot == slot then
+			table.remove(donationGamepasses, i)
+		end
 	end
 end
 
-local function consumePendingReceiver(donorUserId: number, productId: number): number?
-	local key = `{donorUserId}_{productId}`
-	local receiverUserId: number? = nil
-	pcall(function()
-		receiverUserId = PendingDonationsStore:GetAsync(key)
+local function onRequestSetDonationGamepass(player: Player, slot: unknown, gamepassId: unknown)
+	if type(slot) ~= "number" or type(gamepassId) ~= "number" then
+		return
+	end
+	if slot ~= math.floor(slot) or slot < 1 or slot > MAX_GAMEPASS_SLOTS then
+		return
+	end
+
+	local profile = PlayerDataService.get(player)
+	if not profile then
+		return
+	end
+
+	local resultEvent = Net.get(RemoteNames.Events.SetDonationGamepassResult)
+	local donationGamepasses = profile.stand.donationGamepasses
+
+	if gamepassId == 0 then
+		removeSlot(donationGamepasses, slot)
+		resultEvent:FireClient(player, { success = true, slot = slot, cleared = true })
+		return
+	end
+
+	local ok, info = pcall(function()
+		return MarketplaceService:GetProductInfo(gamepassId, Enum.InfoType.GamePass)
 	end)
-	pcall(function()
-		PendingDonationsStore:RemoveAsync(key)
-	end)
-	return receiverUserId
+
+	if not ok or not info then
+		resultEvent:FireClient(player, { success = false, slot = slot, reason = "That Gamepass ID doesn't exist." })
+		return
+	end
+
+	local creator = info.Creator
+	if not creator or creator.CreatorType ~= "User" or creator.Id ~= player.UserId then
+		resultEvent:FireClient(player, { success = false, slot = slot, reason = "You don't own that Gamepass." })
+		return
+	end
+
+	if not info.IsForSale then
+		resultEvent:FireClient(player, { success = false, slot = slot, reason = "That Gamepass isn't for sale." })
+		return
+	end
+
+	removeSlot(donationGamepasses, slot)
+	if #donationGamepasses >= MAX_GAMEPASS_SLOTS then
+		resultEvent:FireClient(player, { success = false, slot = slot, reason = "All donation slots are full." })
+		return
+	end
+
+	table.insert(donationGamepasses, { gamepassId = gamepassId, slot = slot })
+	resultEvent:FireClient(player, {
+		success = true,
+		slot = slot,
+		gamepassId = gamepassId,
+		name = info.Name,
+		price = info.PriceInRobux,
+	})
 end
 
-local function grantDonationRewards(donor: Player, receiver: Player?, tier: DonationConfig.DonationTier)
-	XPService.grantXp(donor, tier.donorXp, "donation_sent")
+local function onReportGamepassDonation(donor: Player, receiverUserId: unknown, gamepassId: unknown)
+	if type(receiverUserId) ~= "number" or type(gamepassId) ~= "number" then
+		return
+	end
+	if donor.UserId == receiverUserId then
+		return
+	end
+
+	local receiver = Players:GetPlayerByUserId(receiverUserId)
+	local receiverProfile = receiver and PlayerDataService.get(receiver)
+	if not receiver or not receiverProfile then
+		return
+	end
+
+	local isLinked = false
+	for _, entry in receiverProfile.stand.donationGamepasses do
+		if entry.gamepassId == gamepassId then
+			isLinked = true
+			break
+		end
+	end
+	if not isLinked then
+		return
+	end
+
+	local ownsOk, owns = pcall(function()
+		return MarketplaceService:UserOwnsGamePassAsync(donor.UserId, gamepassId)
+	end)
+	if not ownsOk or not owns then
+		return
+	end
+
+	local infoOk, info = pcall(function()
+		return MarketplaceService:GetProductInfo(gamepassId, Enum.InfoType.GamePass)
+	end)
+	if not infoOk or not info then
+		return
+	end
+
+	local robuxPrice = (info.PriceInRobux :: number?) or 0
+	local donorXp = computeDonorXp(robuxPrice)
+
+	XPService.grantXp(donor, donorXp, "donation_sent")
 	QuestService.reportProgress(donor, "donate_sent")
 
 	local donorProfile = PlayerDataService.get(donor)
 	if donorProfile then
-		donorProfile.totalDonatedRobux += tier.robuxPrice
+		donorProfile.totalDonatedRobux += robuxPrice
 		donorProfile.donationCount += 1
 	end
 
-	if receiver then
-		local receiverProfile = PlayerDataService.get(receiver)
-		if receiverProfile then
-			receiverProfile.totalReceivedRobux += tier.robuxPrice
-			receiverProfile.receivedCount += 1
-			receiverProfile.stand.totalReceived += tier.robuxPrice
-		end
+	receiverProfile.totalReceivedRobux += robuxPrice
+	receiverProfile.receivedCount += 1
+	receiverProfile.stand.totalReceived += robuxPrice
 
-		XPService.grantXp(receiver, math.floor(tier.donorXp * DonationConfig.ReceiverXpShare), "donation_received")
-		QuestService.reportProgress(receiver, "donate_received")
+	XPService.grantXp(receiver, math.floor(donorXp * 0.35), "donation_received")
+	QuestService.reportProgress(receiver, "donate_received")
 
-		Net.get(RemoteNames.Events.DonationReceived):FireClient(receiver, {
-			fromUserId = donor.UserId,
-			fromName = donor.Name,
-			robuxAmount = tier.robuxPrice,
-		})
-	end
-end
-
-local function processReceipt(receiptInfo): Enum.ProductPurchaseDecision
-	local donor = Players:GetPlayerByUserId(receiptInfo.PlayerId)
-	local tier = DonationConfig.getTierByProductId(receiptInfo.ProductId)
-
-	if not donor or not tier then
-		return Enum.ProductPurchaseDecision.NotProcessedYet
-	end
-
-	local receiverUserId = consumePendingReceiver(receiptInfo.PlayerId, receiptInfo.ProductId)
-	local receiver = receiverUserId and Players:GetPlayerByUserId(receiverUserId) or nil
-
-	local ok = pcall(function()
-		grantDonationRewards(donor, receiver, tier)
-	end)
-
-	if not ok then
-		return Enum.ProductPurchaseDecision.NotProcessedYet
-	end
-
-	return Enum.ProductPurchaseDecision.PurchaseGranted
-end
-
--- Called from the client when a player chooses to donate to a stand's owner.
-function DonationService.requestDonate(donor: Player, receiverUserId: number, productId: number)
-	if donor.UserId == receiverUserId then
-		return -- no self-donation
-	end
-
-	local tier = DonationConfig.getTierByProductId(productId)
-	if not tier then
-		warn(`[DonationService] Unknown donation productId {productId}`)
-		return
-	end
-
-	setPendingReceiver(donor.UserId, receiverUserId, productId)
-	MarketplaceService:PromptProductPurchase(donor, productId)
+	Net.get(RemoteNames.Events.DonationReceived):FireClient(receiver, {
+		fromUserId = donor.UserId,
+		fromName = donor.Name,
+		robuxAmount = robuxPrice,
+	})
 end
 
 function DonationService.start()
-	MarketplaceService.ProcessReceipt = processReceipt
-
-	Net.get(RemoteNames.Events.RequestDonate).OnServerEvent:Connect(function(player: Player, receiverUserId, productId)
-		if type(receiverUserId) ~= "number" or type(productId) ~= "number" then
-			return
-		end
-		DonationService.requestDonate(player, receiverUserId, productId)
-	end)
+	Net.get(RemoteNames.Events.RequestSetDonationGamepass).OnServerEvent:Connect(onRequestSetDonationGamepass)
+	Net.get(RemoteNames.Events.ReportGamepassDonation).OnServerEvent:Connect(onReportGamepassDonation)
 end
 
 return DonationService
