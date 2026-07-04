@@ -32,16 +32,55 @@ local function findPrompt(stand: Model): ProximityPrompt?
 	return stand:FindFirstChildWhichIsA("ProximityPrompt", true)
 end
 
-local function updateStandVisual(stand: Model, ownerName: string?, tierOrder: number)
+-- Stand materials get more premium as tier climbs, so a stand is a real "visual
+-- representation of accomplishments" (design doc) and not just a re-tinted box.
+local function materialForTier(tierOrder: number): Enum.Material
+	if tierOrder >= 6 then
+		return Enum.Material.Neon
+	elseif tierOrder >= 4 then
+		return Enum.Material.Marble
+	elseif tierOrder >= 2 then
+		return Enum.Material.Metal
+	end
+	return Enum.Material.SmoothPlastic
+end
+
+local function updateStandVisual(stand: Model, ownerName: string?, tierOrder: number, ownerTitle: string?)
 	local prompt = findPrompt(stand)
 	if prompt then
 		prompt.ObjectText = ownerName or "Empty Stand"
 	end
 
+	local clampedTier = math.clamp(tierOrder, 1, #RankConfig.Ranks)
+	local rank = RankConfig.Ranks[clampedTier]
+
 	local podium = stand:FindFirstChild("Podium") :: BasePart?
 	if podium then
-		local rank = RankConfig.Ranks[math.clamp(tierOrder, 1, #RankConfig.Ranks)]
 		podium.Color = rank.color
+		podium.Material = materialForTier(clampedTier)
+		-- Stands grow with tier (bigger footprint), height stays put so it never sinks
+		-- into or floats off the floor.
+		local growth = (clampedTier - 1) * 0.6
+		podium.Size = Vector3.new(6 + growth, 3, 6 + growth)
+	end
+
+	local tierRing = stand:FindFirstChild("TierRing") :: BasePart?
+	if tierRing then
+		tierRing.Color = rank.chatTagColor
+		-- Invisible for the base tier, glows in brighter as rank climbs.
+		tierRing.Transparency = clampedTier <= 1 and 1 or math.clamp(0.85 - clampedTier * 0.1, 0.1, 0.7)
+	end
+
+	local canopy = stand:FindFirstChild("Canopy") :: BasePart?
+	if canopy then
+		-- Canopies "unlock" starting at Gold (order 5).
+		if clampedTier >= 5 then
+			canopy.Transparency = 0
+			canopy.Material = clampedTier >= 6 and Enum.Material.Neon or Enum.Material.Marble
+			canopy.Color = rank.color
+		else
+			canopy.Transparency = 1
+		end
 	end
 
 	local signPost = stand:FindFirstChild("SignPost")
@@ -49,6 +88,12 @@ local function updateStandVisual(stand: Model, ownerName: string?, tierOrder: nu
 	local ownerLabel = billboard and billboard:FindFirstChild("OwnerLabel") :: TextLabel?
 	if ownerLabel then
 		ownerLabel.Text = ownerName or "Empty Stand"
+	end
+
+	local titleLabel = billboard and billboard:FindFirstChild("TitleLabel") :: TextLabel?
+	if titleLabel then
+		titleLabel.Text = ownerName and (ownerTitle or rank.title) or ""
+		titleLabel.TextColor3 = rank.color
 	end
 end
 
@@ -73,8 +118,9 @@ local function assignStand(player: Player)
 
 	local rank = XPService.getRank(player)
 	local tierOrder = rank and rank.order or 1
+	local profile = PlayerDataService.get(player)
 	stand:SetAttribute("Tier", tierOrder)
-	updateStandVisual(stand, player.Name, tierOrder)
+	updateStandVisual(stand, player.Name, tierOrder, profile and profile.cosmetics.equippedTitle)
 
 	standByOwner[player] = stand
 end
@@ -168,7 +214,9 @@ function StandService.start()
 		local stand = standByOwner[player]
 		if stand then
 			stand:SetAttribute("Tier", newRank.order)
-			updateStandVisual(stand, player.Name, newRank.order)
+			-- CosmeticService re-equips newRank.title on every rank-up, so use it directly
+			-- here rather than racing profile.cosmetics.equippedTitle against listener order.
+			updateStandVisual(stand, player.Name, newRank.order, newRank.title)
 		end
 	end)
 end

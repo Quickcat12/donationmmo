@@ -155,6 +155,44 @@ local function buildDome(parent: Instance)
 	dome.Parent = parent
 end
 
+-- A flat glow ring at the base of the podium. Invisible at tier 1, grows more vivid as
+-- the owner's rank climbs (see StandService.updateStandVisual) - stands are meant to be a
+-- "visual representation of accomplishments", not just a re-tinted box.
+local function buildTierRing(lookAt: CFrame, parent: Instance)
+	local ring = Instance.new("Part")
+	ring.Name = "TierRing"
+	ring.Anchored = true
+	ring.CanCollide = false
+	ring.CanQuery = false
+	ring.Shape = Enum.PartType.Cylinder
+	-- Wider than the podium ever grows (max footprint ~9.6 studs at the top tier, see
+	-- StandService.updateStandVisual) so it always reads as a ring around the stand.
+	ring.Size = Vector3.new(0.4, 13, 13)
+	ring.CFrame = lookAt * CFrame.new(0, 0.05, 0) * CFrame.Angles(0, 0, math.rad(90))
+	ring.Material = Enum.Material.Neon
+	ring.Color = Color3.fromRGB(150, 150, 150)
+	ring.Transparency = 1
+	ring.Parent = parent
+	return ring
+end
+
+-- A small roof plate over the sign, hidden until the owner reaches a high enough rank to
+-- "unlock" it - larger stands with premium canopies at Gold+ per the design doc.
+local function buildCanopy(lookAt: CFrame, parent: Instance)
+	local canopy = Instance.new("Part")
+	canopy.Name = "Canopy"
+	canopy.Anchored = true
+	canopy.CanCollide = false
+	canopy.CanQuery = false
+	canopy.Size = Vector3.new(7, 0.4, 7)
+	canopy.CFrame = lookAt * CFrame.new(0, 9.2, -2.5)
+	canopy.Material = Enum.Material.SmoothPlastic
+	canopy.Color = Color3.fromRGB(150, 150, 150)
+	canopy.Transparency = 1
+	canopy.Parent = parent
+	return canopy
+end
+
 local function buildStand(index: number, parent: Instance)
 	local angle = (index / STAND_COUNT) * math.pi * 2
 	local x = math.cos(angle) * PLAZA_RADIUS
@@ -165,6 +203,8 @@ local function buildStand(index: number, parent: Instance)
 	local stand = Instance.new("Model")
 	stand.Name = `Stand_{index}`
 
+	buildTierRing(lookAt, stand)
+
 	local podium = Instance.new("Part")
 	podium.Name = "Podium"
 	podium.Anchored = true
@@ -174,6 +214,8 @@ local function buildStand(index: number, parent: Instance)
 	podium.Material = Enum.Material.SmoothPlastic
 	podium.Color = RankConfig.Ranks[1].color
 	podium.Parent = stand
+
+	buildCanopy(lookAt, stand)
 
 	local signPost = Instance.new("Part")
 	signPost.Name = "SignPost"
@@ -187,14 +229,14 @@ local function buildStand(index: number, parent: Instance)
 
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "Sign"
-	billboard.Size = UDim2.fromOffset(200, 60)
+	billboard.Size = UDim2.fromOffset(200, 74)
 	billboard.StudsOffset = Vector3.new(0, 1, 0)
 	billboard.AlwaysOnTop = true
 	billboard.Parent = signPost
 
 	local ownerLabel = Instance.new("TextLabel")
 	ownerLabel.Name = "OwnerLabel"
-	ownerLabel.Size = UDim2.fromScale(1, 1)
+	ownerLabel.Size = UDim2.new(1, 0, 0, 40)
 	ownerLabel.BackgroundTransparency = 0.4
 	ownerLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 	ownerLabel.Text = "Empty Stand"
@@ -202,6 +244,18 @@ local function buildStand(index: number, parent: Instance)
 	ownerLabel.TextScaled = true
 	ownerLabel.TextColor3 = Color3.fromRGB(240, 240, 245)
 	ownerLabel.Parent = billboard
+
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.Name = "TitleLabel"
+	titleLabel.Size = UDim2.new(1, 0, 0, 26)
+	titleLabel.Position = UDim2.new(0, 0, 0, 42)
+	titleLabel.BackgroundTransparency = 0.55
+	titleLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+	titleLabel.Text = ""
+	titleLabel.Font = Enum.Font.Gotham
+	titleLabel.TextScaled = true
+	titleLabel.TextColor3 = RankConfig.Ranks[1].color
+	titleLabel.Parent = billboard
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "DonatePrompt"
@@ -282,6 +336,45 @@ local function buildTestObby(parent: Instance)
 	finish:SetAttribute("CourseId", "test_obby_1")
 end
 
+-- Short, low-XP courses meant to be replayed constantly between donations (the design
+-- doc's "various short obbies for very short amounts of xp each"). ObbyService is fully
+-- data-driven off the ObbyFinish tag + CourseId/XpReward attributes, so each course here
+-- just needs a unique name/position - no server code changes needed to add more.
+local function buildQuickObby(parent: Instance, courseId: string, direction: Vector3, heights: { number }, xpReward: number)
+	local obby = Instance.new("Folder")
+	obby.Name = courseId
+	obby.Parent = parent
+
+	local startOffset = PLAZA_RADIUS + 30
+	local spacing = 9
+
+	for i, height in heights do
+		local platform = Instance.new("Part")
+		platform.Name = `Platform_{i}`
+		platform.Anchored = true
+		platform.CanCollide = true
+		platform.Size = Vector3.new(4, 1, 4)
+		platform.CFrame = CFrame.new(direction * (startOffset + (i - 1) * spacing) + Vector3.new(0, WORLD_Y + height, 0))
+		platform.Material = Enum.Material.Wood
+		platform.Color = Color3.fromRGB(150, 110, 70)
+		platform.Parent = obby
+	end
+
+	local finish = Instance.new("Part")
+	finish.Name = "FinishPad"
+	finish.Anchored = true
+	finish.CanCollide = true
+	finish.Size = Vector3.new(6, 1, 6)
+	finish.CFrame = CFrame.new(direction * (startOffset + #heights * spacing) + Vector3.new(0, WORLD_Y + heights[#heights], 0))
+	finish.Material = Enum.Material.Neon
+	finish.Color = Color3.fromRGB(90, 210, 120)
+	finish.Parent = obby
+
+	CollectionService:AddTag(finish, OBBY_FINISH_TAG)
+	finish:SetAttribute("XpReward", xpReward)
+	finish:SetAttribute("CourseId", courseId)
+end
+
 function WorldBuilderService.build()
 	clearExisting()
 	setupAtmosphere()
@@ -294,6 +387,10 @@ function WorldBuilderService.build()
 	buildDome(root)
 	buildStands(root)
 	buildTestObby(root)
+	-- Diagonal directions (45°/-45°) deliberately avoid the perimeter pillars, which sit
+	-- on a 30°-spaced grid (see buildFloor) - a straight +X/+Z path would run through one.
+	buildQuickObby(root, "quick_obby_1", Vector3.new(1, 0, 1).Unit, { 0, 2, 1, 3 }, 80)
+	buildQuickObby(root, "quick_obby_2", Vector3.new(1, 0, -1).Unit, { 0, 2, 4, 3, 5, 4 }, 130)
 end
 
 return WorldBuilderService

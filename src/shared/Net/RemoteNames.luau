@@ -16,6 +16,10 @@ export type RemoteName =
 	| "QuestsUpdated"
 	| "RequestClaimQuest"
 	| "LeaderboardUpdated"
+	| "CosmeticsUpdated"
+	| "RequestEquipTitle"
+	| "RequestToggleChatTag"
+	| "PlayerJoinedAnnouncement"
 
 local RemoteNames = {
 	Events = {
@@ -32,6 +36,10 @@ local RemoteNames = {
 		QuestsUpdated = "QuestsUpdated", -- server -> client, quest list/progress changed
 		RequestClaimQuest = "RequestClaimQuest", -- client -> server, player claims a completed quest
 		LeaderboardUpdated = "LeaderboardUpdated", -- server -> client, top-N leaderboard snapshot
+		CosmeticsUpdated = "CosmeticsUpdated", -- server -> client, owned/equipped titles + chat tag setting changed
+		RequestEquipTitle = "RequestEquipTitle", -- client -> server, player wants to equip one of their owned titles
+		RequestToggleChatTag = "RequestToggleChatTag", -- client -> server, player toggles showing their rank tag in chat
+		PlayerJoinedAnnouncement = "PlayerJoinedAnnouncement", -- server -> client, a high-rank player just joined the server
 	} :: { [string]: string },
 }
 

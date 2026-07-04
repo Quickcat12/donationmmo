@@ -1,6 +1,7 @@
 --!strict
 -- Full-screen celebration banner shown whenever the server confirms a rank promotion.
 
+local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -15,6 +16,21 @@ local Theme = require(Shared.Util.Theme)
 local player = Players.LocalPlayer
 
 local RankUpController = {}
+
+-- Built-in Sparkles instance - no custom asset uploads needed - for the "instant dopamine"
+-- moment of a rank promotion.
+local function burstSparkles(color: Color3)
+	local character = player.Character
+	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then
+		return
+	end
+
+	local sparkles = Instance.new("Sparkles")
+	sparkles.SparkleColor = color
+	sparkles.Parent = rootPart
+	Debris:AddItem(sparkles, 2.5)
+end
 
 local function showBanner(payload: { oldRank: string, newRank: string, title: string })
 	local rank = RankConfig.getRankByName(payload.newRank)
@@ -66,6 +82,8 @@ local function showBanner(payload: { oldRank: string, newRank: string, title: st
 	TweenService:Create(stroke, fadeIn, { Transparency = 0 }):Play()
 	TweenService:Create(title, fadeIn, { TextTransparency = 0 }):Play()
 	TweenService:Create(subtitle, fadeIn, { TextTransparency = 0 }):Play()
+
+	burstSparkles(color)
 
 	task.delay(3.5, function()
 		local fadeOut = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
