@@ -13,6 +13,7 @@ local Services = script.Parent.Services
 
 local WorldBuilderService = require(Services.WorldBuilderService)
 local VoidKillService = require(Services.VoidKillService)
+local VIPService = require(Services.VIPService)
 local XPService = require(Services.XPService)
 local StandService = require(Services.StandService)
 local DonationService = require(Services.DonationService)
@@ -28,6 +29,7 @@ local PlayerDataService = require(Services.PlayerDataService)
 WorldBuilderService.build()
 
 VoidKillService.start()
+VIPService.start()
 XPService.start()
 StandService.start()
 DonationService.start()

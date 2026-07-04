@@ -12,6 +12,7 @@ local RemoteNames = require(Shared.Net.RemoteNames)
 local Signal = require(Shared.Util.Signal)
 
 local PlayerDataService = require(script.Parent.PlayerDataService)
+local VIPService = require(script.Parent.VIPService)
 
 type RankInfo = RankConfig.RankInfo
 
@@ -87,7 +88,8 @@ function XPService.grantXp(player: Player, amount: number, source: string)
 	end
 
 	local oldRank = RankConfig.getRankForXp(profile.xp)
-	local finalAmount = math.floor(amount * oldRank.xpMultiplier * currentWorldMultiplier)
+	local vipMultiplier = VIPService.getMultiplier(player)
+	local finalAmount = math.floor(amount * oldRank.xpMultiplier * currentWorldMultiplier * vipMultiplier)
 
 	profile.xp += finalAmount
 

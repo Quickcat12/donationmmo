@@ -2,9 +2,16 @@
 -- Game-owned XP boosts, sold as real Developer Products (revenue goes to the
 -- experience/group, unlike donations which are player-to-player via Gamepasses -
 -- see DonationService.luau). This is the only place Developer Products are used.
+--
+-- Source of truth for name/price/xpAmount is scripts/monetization/products.py -
+-- that's what actually creates these as real Developer Products via the Open Cloud
+-- API (see scripts/monetization/create_products.py), and writes the resulting
+-- productId back into this file. If you add/change a tier, edit products.py first,
+-- rerun that script, and let it patch this file - don't hand-edit productId here.
 
 export type XPShopItem = {
-	productId: number, -- fill in with the real Developer Product ID once created
+	productId: number, -- filled in by scripts/monetization/create_products.py
+	name: string, -- must exactly match the Developer Product's name on Roblox
 	robuxPrice: number,
 	xpAmount: number,
 }
@@ -12,9 +19,11 @@ export type XPShopItem = {
 local XPShopConfig = {}
 
 XPShopConfig.Items = {
-	{ productId = 0, robuxPrice = 99, xpAmount = 2500 },
-	{ productId = 0, robuxPrice = 199, xpAmount = 6000 },
-	{ productId = 0, robuxPrice = 499, xpAmount = 17500 },
+	{ productId = 0, name = "Starter XP Pack", robuxPrice = 99, xpAmount = 2500 },
+	{ productId = 0, name = "Booster XP Pack", robuxPrice = 199, xpAmount = 6000 },
+	{ productId = 0, name = "Surge XP Pack", robuxPrice = 499, xpAmount = 17500 },
+	{ productId = 0, name = "Vault XP Pack", robuxPrice = 999, xpAmount = 40000 },
+	{ productId = 0, name = "Empire XP Pack", robuxPrice = 2499, xpAmount = 115000 },
 } :: { XPShopItem }
 
 function XPShopConfig.getItemByProductId(productId: number): XPShopItem?

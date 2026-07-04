@@ -3,3 +3,5 @@
 *.rbxlx
 sourcemap.json
 .vscode/*.log
+__pycache__/
+*.pyc
