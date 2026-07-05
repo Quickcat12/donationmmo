@@ -25,8 +25,26 @@ local function getHud(): ScreenGui
 		or (UICreate("ScreenGui", { Name = "HUD", ResetOnSpawn = false, Parent = playerGui }) :: ScreenGui)
 end
 
+local function formatXp(amount: number): string
+	if amount >= 1000 then
+		return `{amount // 1000}K`
+	end
+	return tostring(amount)
+end
+
+-- Adds thousands separators, e.g. 14750 -> "14,750".
+local function commaFormat(amount: number): string
+	local text = tostring(amount)
+	local formatted, _ = text:gsub("^(-?%d+)(%d%d%d)", "%1,%2")
+	while formatted ~= text do
+		text = formatted
+		formatted, _ = text:gsub("^(-?%d+)(%d%d%d)", "%1,%2")
+	end
+	return formatted
+end
+
 local function buildPanel(hud: ScreenGui): Frame
-	local buttonHeight = 46
+	local buttonHeight = 58
 	local spacing = 8
 	local listHeight = #XPShopConfig.Items * (buttonHeight + spacing)
 	local vipSectionHeight = 74
@@ -67,13 +85,71 @@ local function buildPanel(hud: ScreenGui): Frame
 		local button = UICreate("TextButton", {
 			Size = UDim2.new(1, 0, 0, buttonHeight),
 			BackgroundColor3 = Theme.PanelLight,
-			Text = `{item.name} - {item.xpAmount} XP - {item.robuxPrice} R$`,
-			TextWrapped = true,
-			Font = Theme.FontRegular,
-			TextSize = 14,
-			TextColor3 = Theme.TextPrimary,
+			Text = "",
+			AutoButtonColor = true,
 			Parent = list,
-		}, { UICreate("UICorner", { CornerRadius = UDim.new(0, 8) }) }) :: TextButton
+		}, {
+			UICreate("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			UICreate("UIStroke", {
+				Color = item.accentColor,
+				Thickness = item.bestValue and 2 or 1,
+				Transparency = item.bestValue and 0.15 or 0.75,
+			}),
+			-- A colored "coin" chip standing in for the item's real icon (uploaded once
+			-- create_products.py actually creates it on Roblox - see generate_icons.py).
+			UICreate("Frame", {
+				Name = "Chip",
+				AnchorPoint = Vector2.new(0, 0.5),
+				Position = UDim2.new(0, 8, 0.5, 0),
+				Size = UDim2.fromOffset(42, 42),
+				BackgroundColor3 = item.accentColor,
+			}, {
+				UICreate("UICorner", { CornerRadius = UDim.new(1, 0) }),
+				UICreate("TextLabel", {
+					Size = UDim2.fromScale(1, 1),
+					BackgroundTransparency = 1,
+					Text = formatXp(item.xpAmount),
+					Font = Theme.Font,
+					TextScaled = true,
+					TextColor3 = Theme.Background,
+				}),
+			}),
+			UICreate("TextLabel", {
+				Position = UDim2.fromOffset(58, 6),
+				Size = UDim2.new(1, -68, 0, 20),
+				BackgroundTransparency = 1,
+				Text = item.name,
+				Font = Theme.Font,
+				TextSize = 14,
+				TextColor3 = Theme.TextPrimary,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			}),
+			UICreate("TextLabel", {
+				Position = UDim2.fromOffset(58, 26),
+				Size = UDim2.new(1, -68, 0, 26),
+				BackgroundTransparency = 1,
+				Text = `{commaFormat(item.xpAmount)} XP  •  {item.robuxPrice} R$`,
+				Font = Theme.FontRegular,
+				TextSize = 13,
+				TextColor3 = Theme.TextSecondary,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			}),
+		}) :: TextButton
+
+		if item.bestValue then
+			UICreate("TextLabel", {
+				Name = "BestValueBadge",
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -6, 0, 6),
+				Size = UDim2.fromOffset(74, 16),
+				BackgroundColor3 = item.accentColor,
+				Text = "BEST VALUE",
+				Font = Theme.Font,
+				TextSize = 9,
+				TextColor3 = Theme.Background,
+				Parent = button,
+			}, { UICreate("UICorner", { CornerRadius = UDim.new(0, 4) }) })
+		end
 
 		button.MouseButton1Click:Connect(function()
 			buyEvent:FireServer(item.productId)

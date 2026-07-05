@@ -9,6 +9,7 @@
 
 local CollectionService = game:GetService("CollectionService")
 local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
@@ -16,6 +17,7 @@ local RankConfig = require(game:GetService("ReplicatedStorage").Shared.Config.Ra
 
 local STAND_TAG = "DonationStand"
 local OBBY_FINISH_TAG = "ObbyFinish"
+local TELEPORTER_PROMPT_TAG = "WorldTeleporterPrompt"
 local STAND_COUNT = 16
 local PLAZA_RADIUS = 90
 
@@ -153,6 +155,98 @@ local function buildDome(parent: Instance)
 	dome.Color = Color3.fromRGB(120, 190, 255)
 	dome.Transparency = 0.55
 	dome.Parent = parent
+end
+
+-- A physical portal near spawn that opens the world-select UI (WorldSelectController)
+-- via a ProximityPrompt - a discoverable landmark for "go somewhere else" instead of
+-- only a corner toggle button. Two posts, a slowly-spinning glowing disc between them,
+-- and a floor pad in front.
+local function buildTeleporter(parent: Instance)
+	local baseZ = PLAZA_RADIUS + 45
+	local postSpacing = 9
+
+	local teleporter = Instance.new("Folder")
+	teleporter.Name = "Teleporter"
+	teleporter.Parent = parent
+
+	for _, side in { -1, 1 } do
+		local post = Instance.new("Part")
+		post.Name = `Post_{side}`
+		post.Anchored = true
+		post.CanCollide = true
+		post.Shape = Enum.PartType.Cylinder
+		post.Size = Vector3.new(16, 3, 3)
+		post.CFrame = CFrame.new(side * postSpacing, WORLD_Y + 8, baseZ) * CFrame.Angles(0, 0, math.rad(90))
+		post.Material = Enum.Material.Marble
+		post.Color = Color3.fromRGB(90, 70, 140)
+		post.Parent = teleporter
+	end
+
+	local disc = Instance.new("Part")
+	disc.Name = "PortalDisc"
+	disc.Anchored = true
+	disc.CanCollide = false
+	disc.CanQuery = false
+	disc.Shape = Enum.PartType.Cylinder
+	disc.Size = Vector3.new(1.5, postSpacing * 2 - 2, postSpacing * 2 - 2)
+	disc.CFrame = CFrame.new(0, WORLD_Y + 8, baseZ) * CFrame.Angles(0, 0, math.rad(90))
+	disc.Material = Enum.Material.Neon
+	disc.Color = Color3.fromRGB(140, 100, 230)
+	disc.Transparency = 0.25
+	disc.Parent = teleporter
+
+	-- A continuous spin can't be done with a single TweenService tween - tweening to a
+	-- 360-degree-rotated CFrame is a no-op, since that's mathematically identical to the
+	-- start orientation (shortest-path interpolation sees no rotation to perform at all).
+	-- A per-frame increment is the standard way to actually get a smooth, endless spin.
+	local spinSpeed = math.rad(45) -- radians per second
+	task.spawn(function()
+		while disc.Parent do
+			local dt = RunService.Heartbeat:Wait()
+			disc.CFrame = disc.CFrame * CFrame.Angles(spinSpeed * dt, 0, 0)
+		end
+	end)
+
+	local sparkles = Instance.new("Sparkles")
+	sparkles.SparkleColor = Color3.fromRGB(200, 170, 255)
+	sparkles.Parent = disc
+
+	local label = Instance.new("BillboardGui")
+	label.Name = "Label"
+	label.Size = UDim2.fromOffset(260, 40)
+	label.StudsOffset = Vector3.new(0, postSpacing + 3, 0)
+	label.AlwaysOnTop = true
+	label.Parent = disc
+
+	local labelText = Instance.new("TextLabel")
+	labelText.Size = UDim2.fromScale(1, 1)
+	labelText.BackgroundTransparency = 1
+	labelText.Text = "Lobby Teleporter"
+	labelText.Font = Enum.Font.GothamBold
+	labelText.TextScaled = true
+	labelText.TextColor3 = Color3.fromRGB(220, 200, 255)
+	labelText.TextStrokeTransparency = 0.4
+	labelText.Parent = label
+
+	local pad = Instance.new("Part")
+	pad.Name = "TeleporterPad"
+	pad.Anchored = true
+	pad.CanCollide = true
+	pad.Size = Vector3.new(postSpacing * 2, 1, 6)
+	pad.CFrame = CFrame.new(0, WORLD_Y + 0.5, baseZ - 4)
+	pad.Material = Enum.Material.Marble
+	pad.Color = Color3.fromRGB(120, 100, 160)
+	pad.Parent = teleporter
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "TeleporterPrompt"
+	prompt.ActionText = "Explore Worlds"
+	prompt.ObjectText = "Lobby Teleporter"
+	prompt.MaxActivationDistance = 14
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = pad
+
+	CollectionService:AddTag(prompt, TELEPORTER_PROMPT_TAG)
 end
 
 -- A flat glow ring at the base of the podium. Invisible at tier 1, grows more vivid as
@@ -385,6 +479,7 @@ function WorldBuilderService.build()
 
 	buildFloor(root)
 	buildDome(root)
+	buildTeleporter(root)
 	buildStands(root)
 	buildTestObby(root)
 	-- Diagonal directions (45°/-45°) deliberately avoid the perimeter pillars, which sit

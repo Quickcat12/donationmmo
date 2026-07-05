@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local RankConfig = require(Shared.Config.RankConfig)
 local WorldConfig = require(Shared.Config.WorldConfig)
 local Net = require(Shared.Net.Net)
 local RemoteNames = require(Shared.Net.RemoteNames)
@@ -20,6 +21,22 @@ local State = require(script.Parent.Parent.State)
 local player = Players.LocalPlayer
 
 local WorldSelectController = {}
+
+local panel: Frame? = nil
+
+-- Exposed so other controllers (e.g. TeleporterController, for the physical portal in
+-- the plaza) can open this panel without needing their own copy of it.
+function WorldSelectController.open()
+	if panel then
+		panel.Visible = true
+	end
+end
+
+function WorldSelectController.toggle()
+	if panel then
+		panel.Visible = not panel.Visible
+	end
+end
 
 local function getHud(): ScreenGui
 	local playerGui = player:WaitForChild("PlayerGui")
@@ -89,16 +106,27 @@ local function buildPanel(hud: ScreenGui): Frame
 
 	for _, world in WorldConfig.Worlds do
 		local unlocked = State.level >= world.requiredLevel
+		local rank = RankConfig.getRankByName(world.requiredRank)
+		local rankColor = (rank and rank.color) or Theme.Accent
 
 		local card = UICreate("Frame", {
 			Size = UDim2.new(1, 0, 0, 78),
 			BackgroundColor3 = Theme.PanelLight,
+			ClipsDescendants = true,
 			Parent = scroll,
 		}, {
 			UICreate("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			-- A rank-colored accent stripe down the left edge - the same visual language
+			-- as the rank tags/overhead nameplates, so a world's tier reads at a glance.
+			UICreate("Frame", {
+				Name = "AccentStripe",
+				Size = UDim2.new(0, 5, 1, 0),
+				BackgroundColor3 = rankColor,
+				BackgroundTransparency = unlocked and 0 or 0.6,
+			}),
 			UICreate("TextLabel", {
-				Position = UDim2.fromOffset(10, 6),
-				Size = UDim2.new(1, -20, 0, 20),
+				Position = UDim2.fromOffset(16, 6),
+				Size = UDim2.new(1, -26, 0, 20),
 				BackgroundTransparency = 1,
 				Text = world.displayName,
 				Font = Theme.Font,
@@ -107,8 +135,8 @@ local function buildPanel(hud: ScreenGui): Frame
 				TextXAlignment = Enum.TextXAlignment.Left,
 			}),
 			UICreate("TextLabel", {
-				Position = UDim2.fromOffset(10, 24),
-				Size = UDim2.new(1, -20, 0, 30),
+				Position = UDim2.fromOffset(16, 24),
+				Size = UDim2.new(1, -26, 0, 30),
 				BackgroundTransparency = 1,
 				Text = world.description,
 				TextWrapped = true,
@@ -123,7 +151,7 @@ local function buildPanel(hud: ScreenGui): Frame
 			AnchorPoint = Vector2.new(1, 1),
 			Position = UDim2.new(1, -8, 1, -6),
 			Size = UDim2.fromOffset(90, 26),
-			BackgroundColor3 = unlocked and Theme.Accent or Theme.Background,
+			BackgroundColor3 = unlocked and rankColor or Theme.Background,
 			Text = unlocked and "Travel" or `Lvl {world.requiredLevel}`,
 			Font = Theme.FontRegular,
 			TextSize = 13,
@@ -144,7 +172,7 @@ end
 
 function WorldSelectController.start()
 	local hud = getHud()
-	local panel = buildPanel(hud)
+	panel = buildPanel(hud)
 
 	local toggleButton = UICreate("TextButton", {
 		Name = "WorldToggle",
@@ -159,17 +187,18 @@ function WorldSelectController.start()
 		Parent = hud,
 	}, { UICreate("UICorner", { CornerRadius = UDim.new(1, 0) }) }) :: TextButton
 
-	toggleButton.MouseButton1Click:Connect(function()
-		panel.Visible = not panel.Visible
-	end)
+	toggleButton.MouseButton1Click:Connect(WorldSelectController.toggle)
 
 	-- Rebuild the panel's lock/unlock state whenever the player's level changes,
 	-- preserving whether it was open.
 	State.Changed:Connect(function()
-		local wasVisible = panel.Visible
-		panel:Destroy()
-		panel = buildPanel(hud)
-		panel.Visible = wasVisible
+		local current = panel :: Frame
+		local wasVisible = current.Visible
+		current:Destroy()
+
+		local rebuilt = buildPanel(hud)
+		rebuilt.Visible = wasVisible
+		panel = rebuilt
 	end)
 
 	Net.get(RemoteNames.Events.WorldTravelDenied).OnClientEvent:Connect(function(reason: string)
