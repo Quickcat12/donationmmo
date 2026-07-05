@@ -23,10 +23,7 @@ XPShopConfig.Items = {
 	{ productId = 0, name = "Booster XP Pack", robuxPrice = 249, xpAmount = 6750 },
 	{ productId = 0, name = "Surge XP Pack", robuxPrice = 499, xpAmount = 14750 },
 	{ productId = 0, name = "Vault XP Pack", robuxPrice = 999, xpAmount = 32000 },
-	-- Deliberately capped: the biggest available purchase, at a worse XP-per-Robux
-	-- rate than every tier above, so it can't buy a rank outright (Diamond needs
-	-- 100,000 XP - see RankConfig.luau). Climbing is meant to be earned, not bought.
-	{ productId = 0, name = "Empire XP Pack", robuxPrice = 2500, xpAmount = 50000 },
+	{ productId = 0, name = "Empire XP Pack", robuxPrice = 2500, xpAmount = 85000 },
 } :: { XPShopItem }
 
 function XPShopConfig.getItemByProductId(productId: number): XPShopItem?

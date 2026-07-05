@@ -4,15 +4,20 @@ create_products.py both import this so the name/price/description used to
 create each item on Roblox always matches what gets written into the Luau
 configs.
 
-Pricing curve for the XP Shop: tiers 1-4 each improve on the last tier's
-XP-per-Robux rate (standard "bulk discount" curve). The 5th/max tier is a
-deliberate exception - it's capped at 2,500 Robux and given a *worse* rate
-than every tier below it. That's intentional: this game's whole premise is
-that climbing ranks is earned (via donations/social status), not bought, so
-the single biggest available purchase should not be able to vault someone
-straight to a top rank. 50,000 XP is enough to be worth buying, but nowhere
-near "buy your way to Diamond in one purchase" (Diamond needs 100,000 XP -
-see RankConfig.luau).
+Pricing curve for the XP Shop: every tier improves on the last one's
+XP-per-Robux rate (standard "bulk discount" curve, strictly increasing).
+
+An earlier version tried to make the top tier a deliberately *worse* rate as
+an anti-pay-to-rank measure, which was broken: since Developer Products can
+be bought repeatedly, a worse top tier is just a worse deal players route
+around (e.g. 2x the second-to-top tier beats 1x the "capped" top tier for
+less money). A single tier's price can never actually cap total spendable
+XP when it's repurchasable - that would need a purchase-frequency limit
+enforced in XPShopService.luau, not a pricing trick. This curve does still
+keep the single biggest available purchase (one Empire pack) short of
+Diamond's 100,000 XP threshold, but someone buying two Empire packs
+obviously isn't stopped by that - if a hard cap on buying rank progression
+is wanted, it needs to be a real rule in code, not a pricing curve.
 """
 
 XP_SHOP_PRODUCTS = [
@@ -51,9 +56,9 @@ XP_SHOP_PRODUCTS = [
     {
         "key": "xp_pack_empire",
         "name": "Empire XP Pack",
-        "description": "Instantly grants 50,000 XP. The biggest pack available, capped deliberately so it can't buy a rank outright.",
+        "description": "Instantly grants 85,000 XP. The best XP-per-Robux value in the shop.",
         "price_in_robux": 2500,
-        "xp_amount": 50000,
+        "xp_amount": 85000,
         "color": (90, 210, 230),  # diamond - matches Diamond rank
     },
 ]
