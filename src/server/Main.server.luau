@@ -23,6 +23,7 @@ local QuestService = require(Services.QuestService)
 local ObbyService = require(Services.ObbyService)
 local LeaderboardService = require(Services.LeaderboardService)
 local CosmeticService = require(Services.CosmeticService)
+local WorldPopulationService = require(Services.WorldPopulationService)
 local PlayerDataService = require(Services.PlayerDataService)
 
 -- Must run before StandService.start(), which scans for already-placed stands.
@@ -39,6 +40,7 @@ QuestService.start()
 ObbyService.start()
 LeaderboardService.start()
 CosmeticService.start()
+WorldPopulationService.start()
 
 -- Must start last: fires DataLoaded for every current/joining player, and every other
 -- service above needs to already be listening for that signal.

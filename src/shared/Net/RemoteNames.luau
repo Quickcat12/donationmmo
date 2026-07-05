@@ -20,6 +20,7 @@ export type RemoteName =
 	| "RequestEquipTitle"
 	| "RequestToggleChatTag"
 	| "PlayerJoinedAnnouncement"
+	| "WorldPopulationUpdated"
 
 local RemoteNames = {
 	Events = {
@@ -40,6 +41,7 @@ local RemoteNames = {
 		RequestEquipTitle = "RequestEquipTitle", -- client -> server, player wants to equip one of their owned titles
 		RequestToggleChatTag = "RequestToggleChatTag", -- client -> server, player toggles showing their rank tag in chat
 		PlayerJoinedAnnouncement = "PlayerJoinedAnnouncement", -- server -> client, a high-rank player just joined the server
+		WorldPopulationUpdated = "WorldPopulationUpdated", -- server -> client, per-world live player count snapshot (see WorldPopulationService.luau)
 	} :: { [string]: string },
 }
 
