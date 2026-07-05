@@ -13,26 +13,30 @@ local Net = require(Shared.Net.Net)
 local RemoteNames = require(Shared.Net.RemoteNames)
 
 local XPService = require(script.Parent.XPService)
+local ServerBoostService = require(script.Parent.ServerBoostService)
 
 local XPShopService = {}
 
+-- The sole owner of MarketplaceService.ProcessReceipt for the whole experience - only
+-- one callback can be registered at a time, so any other Developer Product (e.g. the
+-- server-wide XP boost) delegates through here rather than registering its own.
 local function processReceipt(receiptInfo): Enum.ProductPurchaseDecision
 	local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
 	local item = XPShopConfig.getItemByProductId(receiptInfo.ProductId)
 
-	if not player or not item then
-		return Enum.ProductPurchaseDecision.NotProcessedYet
+	if player and item then
+		local ok = pcall(function()
+			XPService.grantXp(player, item.xpAmount, "xp_shop")
+		end)
+		return ok and Enum.ProductPurchaseDecision.PurchaseGranted or Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 
-	local ok = pcall(function()
-		XPService.grantXp(player, item.xpAmount, "xp_shop")
-	end)
-
-	if not ok then
-		return Enum.ProductPurchaseDecision.NotProcessedYet
+	local boostDecision = ServerBoostService.tryProcessReceipt(receiptInfo)
+	if boostDecision then
+		return boostDecision
 	end
 
-	return Enum.ProductPurchaseDecision.PurchaseGranted
+	return Enum.ProductPurchaseDecision.NotProcessedYet
 end
 
 local function onRequestBuyXp(player: Player, productId: unknown)

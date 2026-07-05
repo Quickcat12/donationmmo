@@ -21,6 +21,9 @@ export type RemoteName =
 	| "RequestToggleChatTag"
 	| "PlayerJoinedAnnouncement"
 	| "WorldPopulationUpdated"
+	| "BigDonationAnnouncement"
+	| "RequestBuyServerBoost"
+	| "ServerBoostActivated"
 
 local RemoteNames = {
 	Events = {
@@ -42,6 +45,9 @@ local RemoteNames = {
 		RequestToggleChatTag = "RequestToggleChatTag", -- client -> server, player toggles showing their rank tag in chat
 		PlayerJoinedAnnouncement = "PlayerJoinedAnnouncement", -- server -> client, a high-rank player just joined the server
 		WorldPopulationUpdated = "WorldPopulationUpdated", -- server -> client, per-world live player count snapshot (see WorldPopulationService.luau)
+		BigDonationAnnouncement = "BigDonationAnnouncement", -- server -> client, a donation at/above DonationService.BIG_DONATION_THRESHOLD_ROBUX just happened
+		RequestBuyServerBoost = "RequestBuyServerBoost", -- client -> server, player wants to prompt purchase of the server-wide XP boost Developer Product
+		ServerBoostActivated = "ServerBoostActivated", -- server -> client, someone just bought the server-wide XP boost
 	} :: { [string]: string },
 }
 

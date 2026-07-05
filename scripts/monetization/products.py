@@ -77,3 +77,16 @@ VIP_GAMEPASS = {
     "xp_multiplier": 1.15,
     "color": (255, 205, 70),
 }
+
+# A Developer Product (not player-owned - the experience's) that temporarily boosts XP
+# for EVERYONE currently in the server, with a public announcement crediting the buyer.
+# A social-status purchase rather than a personal one - see ServerBoostService.luau.
+SERVER_BOOST_PRODUCT = {
+    "key": "server_boost",
+    "name": "Server XP Blessing",
+    "description": "Grants everyone in the server 2x XP for 15 minutes, with a server-wide announcement crediting you.",
+    "price_in_robux": 499,
+    "xp_multiplier": 2.0,
+    "duration_seconds": 15 * 60,
+    "color": (230, 90, 210),
+}

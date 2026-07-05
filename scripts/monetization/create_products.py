@@ -38,13 +38,14 @@ except ImportError:
     print("Missing dependency. Run: pip install rblxopencloud", file=sys.stderr)
     sys.exit(1)
 
-from products import VIP_GAMEPASS, XP_SHOP_PRODUCTS
+from products import SERVER_BOOST_PRODUCT, VIP_GAMEPASS, XP_SHOP_PRODUCTS
 
 SCRIPT_DIR = os.path.dirname(__file__)
 ICONS_DIR = os.path.join(SCRIPT_DIR, "icons")
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 XP_SHOP_CONFIG_PATH = os.path.join(REPO_ROOT, "src", "shared", "Config", "XPShopConfig.luau")
 VIP_CONFIG_PATH = os.path.join(REPO_ROOT, "src", "shared", "Config", "VIPConfig.luau")
+SERVER_BOOST_CONFIG_PATH = os.path.join(REPO_ROOT, "src", "shared", "Config", "ServerBoostConfig.luau")
 
 
 def patch_xp_shop_config(name_to_id: dict):
@@ -81,6 +82,21 @@ def patch_vip_config(gamepass_id: int):
     print(f"Patched {VIP_CONFIG_PATH}")
 
 
+def patch_server_boost_config(product_id: int):
+    with open(SERVER_BOOST_CONFIG_PATH, "r") as f:
+        content = f.read()
+
+    new_content, count = re.subn(
+        r"ServerBoostConfig\.ProductId = \d+", f"ServerBoostConfig.ProductId = {product_id}", content
+    )
+    if count == 0:
+        print(f"  WARNING: could not find ServerBoostConfig.ProductId in {SERVER_BOOST_CONFIG_PATH} - patch it by hand.")
+        return
+    with open(SERVER_BOOST_CONFIG_PATH, "w") as f:
+        f.write(new_content)
+    print(f"Patched {SERVER_BOOST_CONFIG_PATH}")
+
+
 def main():
     api_key = os.environ.get("ROBLOX_API_KEY")
     universe_id = os.environ.get("ROBLOX_UNIVERSE_ID")
@@ -101,6 +117,7 @@ def main():
     for item in XP_SHOP_PRODUCTS:
         print(f"  - Developer Product \"{item['name']}\": {item['price_in_robux']} R$ -> {item['xp_amount']} XP")
     print(f"  - Game Pass \"{VIP_GAMEPASS['name']}\": {VIP_GAMEPASS['price_in_robux']} R$ -> +{int((VIP_GAMEPASS['xp_multiplier'] - 1) * 100)}% XP forever")
+    print(f"  - Developer Product \"{SERVER_BOOST_PRODUCT['name']}\": {SERVER_BOOST_PRODUCT['price_in_robux']} R$ -> {SERVER_BOOST_PRODUCT['xp_multiplier']}x XP server-wide for {SERVER_BOOST_PRODUCT['duration_seconds'] // 60} min")
     print("Any item whose name already exists on this experience will be skipped, not duplicated.")
     print()
 
@@ -146,12 +163,28 @@ def main():
         vip_id = gamepass.id
         print(f"Created \"{VIP_GAMEPASS['name']}\" -> id {vip_id}")
 
+    if SERVER_BOOST_PRODUCT["name"] in existing_products:
+        boost_id = existing_products[SERVER_BOOST_PRODUCT["name"]]
+        print(f"Already exists: \"{SERVER_BOOST_PRODUCT['name']}\" (id {boost_id}) - skipping creation.")
+    else:
+        icon_path = os.path.join(ICONS_DIR, f"{SERVER_BOOST_PRODUCT['key']}.png")
+        with open(icon_path, "rb") as icon_file:
+            boost_product = experience.create_developer_product(
+                name=SERVER_BOOST_PRODUCT["name"],
+                description=SERVER_BOOST_PRODUCT["description"],
+                price_in_robux=SERVER_BOOST_PRODUCT["price_in_robux"],
+                icon_file=icon_file,
+            )
+        boost_id = boost_product.id
+        print(f"Created \"{SERVER_BOOST_PRODUCT['name']}\" -> id {boost_id}")
+
     print()
     patch_xp_shop_config(xp_shop_ids)
     patch_vip_config(vip_id)
+    patch_server_boost_config(boost_id)
 
     print()
-    print("Done. Review the diff in src/shared/Config/XPShopConfig.luau and VIPConfig.luau, then commit it.")
+    print("Done. Review the diff in src/shared/Config/XPShopConfig.luau, VIPConfig.luau, and ServerBoostConfig.luau, then commit it.")
     print("New Developer Products/Game Passes can take a few minutes to become purchasable in-experience.")
 
 

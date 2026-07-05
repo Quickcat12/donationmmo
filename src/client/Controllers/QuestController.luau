@@ -1,6 +1,9 @@
 --!strict
--- Toggleable daily quest tracker. Rebuilds its list every time the server pushes a
--- QuestsUpdated snapshot (on join, on progress, and after claiming).
+-- Toggleable daily quest tracker. Updates in place whenever the server pushes a
+-- QuestsUpdated snapshot (on join, on progress, and after claiming) - cards are cached
+-- by quest id and only their text/bar/button are touched, rather than destroying and
+-- rebuilding the whole list every update (which used to reset scroll position and
+-- visibly flicker whenever progress ticked during active play).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -22,10 +25,19 @@ type QuestSnapshotEntry = {
 	completed: boolean,
 }
 
+type QuestCardRefs = {
+	card: Frame,
+	descriptionLabel: TextLabel,
+	fillBar: Frame,
+	progressLabel: TextLabel,
+	claimButton: TextButton,
+}
+
 local QuestController = {}
 
 local panel: Frame
 local scroll: ScrollingFrame
+local questCards: { [string]: QuestCardRefs } = {}
 
 local function getHud(): ScreenGui
 	local playerGui = player:WaitForChild("PlayerGui")
@@ -33,78 +45,104 @@ local function getHud(): ScreenGui
 		or (UICreate("ScreenGui", { Name = "HUD", ResetOnSpawn = false, Parent = playerGui }) :: ScreenGui)
 end
 
-local function renderQuests(quests: { QuestSnapshotEntry })
-	scroll:ClearAllChildren()
-
+local function buildQuestCard(questId: string, layoutOrder: number): QuestCardRefs
 	local claimEvent = Net.get(RemoteNames.Events.RequestClaimQuest)
 
-	local layout = UICreate("UIListLayout", { Padding = UDim.new(0, 8) })
-	layout.Parent = scroll
+	local card = UICreate("Frame", {
+		Size = UDim2.new(1, 0, 0, 70),
+		BackgroundColor3 = Theme.PanelLight,
+		LayoutOrder = layoutOrder,
+		Parent = scroll,
+	}, {
+		UICreate("UICorner", { CornerRadius = UDim.new(0, 8) }),
+	}) :: Frame
 
-	for _, quest in quests do
-		local progressFraction = math.clamp(quest.progress / quest.goalCount, 0, 1)
-		local canClaim = quest.progress >= quest.goalCount and not quest.completed
+	local descriptionLabel = UICreate("TextLabel", {
+		Position = UDim2.fromOffset(10, 6),
+		Size = UDim2.new(1, -20, 0, 18),
+		BackgroundTransparency = 1,
+		Font = Theme.FontRegular,
+		TextSize = 13,
+		TextColor3 = Theme.TextPrimary,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = card,
+	}) :: TextLabel
 
-		local card = UICreate("Frame", {
-			Size = UDim2.new(1, 0, 0, 70),
-			BackgroundColor3 = Theme.PanelLight,
-			Parent = scroll,
-		}, {
-			UICreate("UICorner", { CornerRadius = UDim.new(0, 8) }),
-			UICreate("TextLabel", {
-				Position = UDim2.fromOffset(10, 6),
-				Size = UDim2.new(1, -20, 0, 18),
-				BackgroundTransparency = 1,
-				Text = quest.description,
-				Font = Theme.FontRegular,
-				TextSize = 13,
-				TextColor3 = Theme.TextPrimary,
-				TextXAlignment = Enum.TextXAlignment.Left,
-			}),
-			UICreate("Frame", {
-				Position = UDim2.fromOffset(10, 30),
-				Size = UDim2.new(1, -110, 0, 8),
-				BackgroundColor3 = Theme.Background,
-			}, {
-				UICreate("UICorner", { CornerRadius = UDim.new(1, 0) }),
-				UICreate("Frame", {
-					Size = UDim2.new(progressFraction, 0, 1, 0),
-					BackgroundColor3 = quest.completed and Theme.Success or Theme.Accent,
-				}, { UICreate("UICorner", { CornerRadius = UDim.new(1, 0) }) }),
-			}),
-			UICreate("TextLabel", {
-				Position = UDim2.fromOffset(10, 44),
-				Size = UDim2.new(1, -110, 0, 16),
-				BackgroundTransparency = 1,
-				Text = `{quest.progress}/{quest.goalCount}  •  +{quest.xpReward} XP`,
-				Font = Theme.FontRegular,
-				TextSize = 11,
-				TextColor3 = Theme.TextSecondary,
-				TextXAlignment = Enum.TextXAlignment.Left,
-			}),
-		})
+	local barTrack = UICreate("Frame", {
+		Position = UDim2.fromOffset(10, 30),
+		Size = UDim2.new(1, -110, 0, 8),
+		BackgroundColor3 = Theme.Background,
+		Parent = card,
+	}, {
+		UICreate("UICorner", { CornerRadius = UDim.new(1, 0) }),
+	})
 
-		local claimButton = UICreate("TextButton", {
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -8, 0.5, 0),
-			Size = UDim2.fromOffset(84, 32),
-			BackgroundColor3 = quest.completed and Theme.Background
-				or (canClaim and Theme.Accent or Theme.Background),
-			Text = quest.completed and "Done" or "Claim",
-			Font = Theme.FontRegular,
-			TextSize = 13,
-			TextColor3 = quest.completed and Theme.TextSecondary
-				or (canClaim and Theme.Background or Theme.TextSecondary),
-			Active = canClaim,
-			Parent = card,
-		}, { UICreate("UICorner", { CornerRadius = UDim.new(0, 6) }) }) :: TextButton
+	local fillBar = UICreate("Frame", {
+		Size = UDim2.new(0, 0, 1, 0),
+		Parent = barTrack,
+	}, { UICreate("UICorner", { CornerRadius = UDim.new(1, 0) }) }) :: Frame
 
-		claimButton.MouseButton1Click:Connect(function()
-			if not canClaim then
-				return
-			end
-			claimEvent:FireServer(quest.id)
-		end)
+	local progressLabel = UICreate("TextLabel", {
+		Position = UDim2.fromOffset(10, 44),
+		Size = UDim2.new(1, -110, 0, 16),
+		BackgroundTransparency = 1,
+		Font = Theme.FontRegular,
+		TextSize = 11,
+		TextColor3 = Theme.TextSecondary,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = card,
+	}) :: TextLabel
+
+	local claimButton = UICreate("TextButton", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -8, 0.5, 0),
+		Size = UDim2.fromOffset(84, 32),
+		Font = Theme.FontRegular,
+		TextSize = 13,
+		Parent = card,
+	}, { UICreate("UICorner", { CornerRadius = UDim.new(0, 6) }) }) :: TextButton
+
+	claimButton.MouseButton1Click:Connect(function()
+		local refs = questCards[questId]
+		if refs and refs.claimButton.Active then
+			claimEvent:FireServer(questId)
+		end
+	end)
+
+	return {
+		card = card,
+		descriptionLabel = descriptionLabel,
+		fillBar = fillBar,
+		progressLabel = progressLabel,
+		claimButton = claimButton,
+	}
+end
+
+local function updateQuestCard(refs: QuestCardRefs, quest: QuestSnapshotEntry)
+	local progressFraction = math.clamp(quest.progress / quest.goalCount, 0, 1)
+	local canClaim = quest.progress >= quest.goalCount and not quest.completed
+
+	refs.descriptionLabel.Text = quest.description
+	refs.fillBar.Size = UDim2.new(progressFraction, 0, 1, 0)
+	refs.fillBar.BackgroundColor3 = quest.completed and Theme.Success or Theme.Accent
+	refs.progressLabel.Text = `{quest.progress}/{quest.goalCount}  •  +{quest.xpReward} XP`
+
+	refs.claimButton.Text = quest.completed and "Done" or "Claim"
+	refs.claimButton.BackgroundColor3 = quest.completed and Theme.Background
+		or (canClaim and Theme.Accent or Theme.Background)
+	refs.claimButton.TextColor3 = quest.completed and Theme.TextSecondary
+		or (canClaim and Theme.Background or Theme.TextSecondary)
+	refs.claimButton.Active = canClaim
+end
+
+local function renderQuests(quests: { QuestSnapshotEntry })
+	for index, quest in quests do
+		local refs = questCards[quest.id]
+		if not refs then
+			refs = buildQuestCard(quest.id, index)
+			questCards[quest.id] = refs
+		end
+		updateQuestCard(refs, quest)
 	end
 end
 
@@ -138,6 +176,8 @@ local function buildPanel(hud: ScreenGui)
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollBarThickness = 6,
 		Parent = panel,
+	}, {
+		UICreate("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
 	}) :: ScrollingFrame
 
 	local toggleButton = UICreate("TextButton", {

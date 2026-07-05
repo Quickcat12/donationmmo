@@ -1,9 +1,9 @@
 # Monetization setup scripts
 
-Creates the real, live Developer Products (XP Shop) and the one Game Pass (VIP) for
-this experience via Roblox's Open Cloud API, generates their store icons, and patches
-the resulting IDs into `src/shared/Config/XPShopConfig.luau` and
-`src/shared/Config/VIPConfig.luau`.
+Creates the real, live Developer Products (XP Shop + the server-wide XP Blessing) and
+the one Game Pass (VIP) for this experience via Roblox's Open Cloud API, generates
+their store icons, and patches the resulting IDs into `src/shared/Config/XPShopConfig.luau`,
+`src/shared/Config/VIPConfig.luau`, and `src/shared/Config/ServerBoostConfig.luau`.
 
 **This is not run automatically and can't be run from a sandboxed session** - Roblox's
 API isn't reachable from there. Run it yourself, once, from a machine with normal
@@ -48,9 +48,10 @@ experience is skipped, not duplicated.
 
 ## 4. Review and commit
 
-The script edits two files in place:
+The script edits three files in place:
 - `src/shared/Config/XPShopConfig.luau` (5 Developer Product IDs)
 - `src/shared/Config/VIPConfig.luau` (1 Game Pass ID)
+- `src/shared/Config/ServerBoostConfig.luau` (1 Developer Product ID)
 
 Review the diff, then commit and push it like normal. New items can take a few
 minutes on Roblox's side before they're actually purchasable in-experience.

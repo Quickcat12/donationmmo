@@ -157,11 +157,13 @@ local function buildPanel(hud: ScreenGui): Frame
 
 		setButton.MouseButton1Click:Connect(function()
 			local gamepassId = tonumber(input.Text)
-			if not gamepassId or gamepassId <= 0 then
+			-- The server re-validates everything regardless (see DonationService.luau) -
+			-- this is just to drop obviously-malformed input before it's even sent.
+			if not gamepassId or gamepassId ~= math.floor(gamepassId) or gamepassId <= 0 or gamepassId > 9_999_999_999 then
 				showToast(hud, "Enter a valid numeric Gamepass ID.", Theme.Danger)
 				return
 			end
-			setEvent:FireServer(slot, math.floor(gamepassId))
+			setEvent:FireServer(slot, gamepassId)
 		end)
 
 		clearButton.MouseButton1Click:Connect(function()

@@ -25,6 +25,25 @@ local QuestService = require(script.Parent.QuestService)
 local DonationService = {}
 
 local MAX_GAMEPASS_SLOTS = 6
+local BIG_DONATION_THRESHOLD_ROBUX = 1000
+
+-- Both handlers below call MarketplaceService (GetProductInfo / UserOwnsGamePassAsync) -
+-- external, budget-limited calls. Without a per-player cooldown, a malicious client could
+-- fire either remote in a loop with random IDs and exhaust the server's Marketplace API
+-- budget, breaking real purchases for everyone on the server.
+local ACTION_COOLDOWN_SECONDS = 5
+local lastSetGamepassActionAt: { [Player]: number } = {}
+local lastReportDonationActionAt: { [Player]: number } = {}
+
+local function isOnCooldown(cooldowns: { [Player]: number }, player: Player): boolean
+	local last = cooldowns[player]
+	local now = os.clock()
+	if last and (now - last) < ACTION_COOLDOWN_SECONDS then
+		return true
+	end
+	cooldowns[player] = now
+	return false
+end
 
 -- Donor XP scales with the live Robux price of whatever Gamepass they bought, so it works
 -- for any price a player sets on their own Gamepass (not a fixed set of tiers).
@@ -59,6 +78,11 @@ local function onRequestSetDonationGamepass(player: Player, slot: unknown, gamep
 	if gamepassId == 0 then
 		removeSlot(donationGamepasses, slot)
 		resultEvent:FireClient(player, { success = true, slot = slot, cleared = true })
+		return
+	end
+
+	if isOnCooldown(lastSetGamepassActionAt, player) then
+		resultEvent:FireClient(player, { success = false, slot = slot, reason = "Please wait a few seconds before trying another Gamepass ID." })
 		return
 	end
 
@@ -123,6 +147,10 @@ local function onReportGamepassDonation(donor: Player, receiverUserId: unknown, 
 		return
 	end
 
+	if isOnCooldown(lastReportDonationActionAt, donor) then
+		return
+	end
+
 	local ownsOk, owns = pcall(function()
 		return MarketplaceService:UserOwnsGamePassAsync(donor.UserId, gamepassId)
 	end)
@@ -161,11 +189,26 @@ local function onReportGamepassDonation(donor: Player, receiverUserId: unknown, 
 		fromName = donor.Name,
 		robuxAmount = robuxPrice,
 	})
+
+	-- Big donations are social proof - broadcasting them publicly is what makes other
+	-- players want to match or beat it, not just a private transaction between two people.
+	if robuxPrice >= BIG_DONATION_THRESHOLD_ROBUX then
+		Net.get(RemoteNames.Events.BigDonationAnnouncement):FireAllClients({
+			donorName = donor.Name,
+			receiverName = receiver.Name,
+			robuxAmount = robuxPrice,
+		})
+	end
 end
 
 function DonationService.start()
 	Net.get(RemoteNames.Events.RequestSetDonationGamepass).OnServerEvent:Connect(onRequestSetDonationGamepass)
 	Net.get(RemoteNames.Events.ReportGamepassDonation).OnServerEvent:Connect(onReportGamepassDonation)
+
+	Players.PlayerRemoving:Connect(function(player: Player)
+		lastSetGamepassActionAt[player] = nil
+		lastReportDonationActionAt[player] = nil
+	end)
 end
 
 return DonationService

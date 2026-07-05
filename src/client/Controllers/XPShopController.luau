@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local XPShopConfig = require(Shared.Config.XPShopConfig)
 local VIPConfig = require(Shared.Config.VIPConfig)
+local ServerBoostConfig = require(Shared.Config.ServerBoostConfig)
 local Net = require(Shared.Net.Net)
 local RemoteNames = require(Shared.Net.RemoteNames)
 local UICreate = require(Shared.Util.UICreate)
@@ -48,12 +49,13 @@ local function buildPanel(hud: ScreenGui): Frame
 	local spacing = 8
 	local listHeight = #XPShopConfig.Items * (buttonHeight + spacing)
 	local vipSectionHeight = 74
+	local boostSectionHeight = 74
 
 	local panel = UICreate("Frame", {
 		Name = "XPShopPanel",
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 20, 1, -90),
-		Size = UDim2.fromOffset(280, 50 + listHeight + vipSectionHeight),
+		Size = UDim2.fromOffset(280, 50 + listHeight + vipSectionHeight + boostSectionHeight),
 		BackgroundColor3 = Theme.Panel,
 		Visible = false,
 		Parent = hud,
@@ -186,6 +188,32 @@ local function buildPanel(hud: ScreenGui): Frame
 
 	player:GetAttributeChangedSignal("VIPOwned"):Connect(refreshVipButton)
 	refreshVipButton()
+
+	-- A social-status purchase, not a personal one: this boosts XP for everyone
+	-- currently in the server, with a public announcement crediting the buyer (see
+	-- ServerBoostService.luau).
+	local boostButton = UICreate("TextButton", {
+		Name = "ServerBoostButton",
+		Position = UDim2.fromOffset(10, 54 + listHeight + vipSectionHeight),
+		Size = UDim2.new(1, -20, 0, boostSectionHeight - 10),
+		BackgroundColor3 = Theme.PanelLight,
+		Text = `Bless the Server: {ServerBoostConfig.Multiplier}x XP for {ServerBoostConfig.DurationSeconds // 60} min - {ServerBoostConfig.PriceInRobux} R$`,
+		TextWrapped = true,
+		Font = Theme.Font,
+		TextSize = 13,
+		TextColor3 = Theme.TextPrimary,
+		Parent = panel,
+	}, {
+		UICreate("UICorner", { CornerRadius = UDim.new(0, 8) }),
+		UICreate("UIStroke", { Color = Theme.Accent, Thickness = 1, Transparency = 0.4 }),
+	}) :: TextButton
+
+	boostButton.MouseButton1Click:Connect(function()
+		if ServerBoostConfig.ProductId == 0 then
+			return
+		end
+		Net.get(RemoteNames.Events.RequestBuyServerBoost):FireServer()
+	end)
 
 	return panel
 end

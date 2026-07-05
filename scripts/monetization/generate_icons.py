@@ -17,7 +17,7 @@ import os
 
 from PIL import Image, ImageDraw, ImageFont
 
-from products import VIP_GAMEPASS, XP_SHOP_PRODUCTS
+from products import SERVER_BOOST_PRODUCT, VIP_GAMEPASS, XP_SHOP_PRODUCTS
 
 SIZE = 512
 FONT_PATHS = [
@@ -142,6 +142,36 @@ def build_vip_icon(color: tuple):
     return img
 
 
+def build_burst_icon(multiplier: float, color: tuple):
+    """An 8-point starburst for the server-wide boost - reads as "everyone gets a
+    blessing" rather than a personal item like the crown (VIP) or coin (XP packs)."""
+    img = radial_background(color)
+    draw = ImageDraw.Draw(img)
+
+    border = 18
+    draw.ellipse(
+        [border, border, SIZE - border, SIZE - border],
+        outline=lighten(color, 0.8),
+        width=10,
+    )
+
+    cx, cy = SIZE / 2, SIZE * 0.38
+    outer_r, inner_r = SIZE * 0.24, SIZE * 0.1
+    points = []
+    for i in range(16):
+        angle = math.pi * 2 * i / 16 - math.pi / 2
+        r = outer_r if i % 2 == 0 else inner_r
+        points.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
+    draw.polygon(points, fill=lighten(color, 0.85), outline=darken(color, 0.6))
+
+    mult_text = f"{multiplier:g}x"
+    draw_centered_text(draw, mult_text, SIZE * 0.62, load_font(100), (255, 255, 255), stroke=darken(color, 0.6))
+
+    mask = rounded_mask(64)
+    img.putalpha(mask)
+    return img
+
+
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -155,6 +185,11 @@ def main():
     vip_path = os.path.join(OUTPUT_DIR, f"{VIP_GAMEPASS['key']}.png")
     vip_icon.save(vip_path)
     print(f"wrote {vip_path}")
+
+    boost_icon = build_burst_icon(SERVER_BOOST_PRODUCT["xp_multiplier"], SERVER_BOOST_PRODUCT["color"])
+    boost_path = os.path.join(OUTPUT_DIR, f"{SERVER_BOOST_PRODUCT['key']}.png")
+    boost_icon.save(boost_path)
+    print(f"wrote {boost_path}")
 
 
 if __name__ == "__main__":

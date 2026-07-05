@@ -16,20 +16,20 @@ Signal.__index = Signal
 
 function Signal.new<T...>(): Signal<T...>
 	local self = setmetatable({
-		_callbacks = {} :: { (T...) -> () },
+		-- Keyed by a unique per-connection token rather than an array, so Disconnect is
+		-- an O(1) table clear instead of an O(N) table.find + table.remove.
+		_callbacks = {} :: { [{}]: (T...) -> () },
 	}, Signal)
 	return (self :: any) :: Signal<T...>
 end
 
 function Signal:Connect(callback)
-	table.insert(self._callbacks, callback)
+	local token = {}
+	self._callbacks[token] = callback
 
 	local connection = {}
 	function connection.Disconnect()
-		local index = table.find(self._callbacks, callback)
-		if index then
-			table.remove(self._callbacks, index)
-		end
+		self._callbacks[token] = nil
 	end
 
 	return connection

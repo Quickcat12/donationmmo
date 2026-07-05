@@ -10,6 +10,8 @@ local REMOTES_FOLDER_NAME = "Remotes"
 
 local Net = {}
 
+local remoteCache: { [string]: RemoteEvent } = {}
+
 local function getRemotesFolder(): Folder
 	local folder = ReplicatedStorage:FindFirstChild(REMOTES_FOLDER_NAME)
 	if not folder then
@@ -33,9 +35,16 @@ function Net.bootstrap()
 end
 
 function Net.get(remoteName: string): RemoteEvent
+	local cached = remoteCache[remoteName]
+	if cached then
+		return cached
+	end
+
 	local folder = getRemotesFolder()
-	local event = folder:WaitForChild(remoteName, 10)
+	local event = folder:FindFirstChild(remoteName) or folder:WaitForChild(remoteName, 10)
 	assert(event, `Remote "{remoteName}" was never created - did the server call Net.bootstrap()?`)
+
+	remoteCache[remoteName] = event :: RemoteEvent
 	return event :: RemoteEvent
 end
 

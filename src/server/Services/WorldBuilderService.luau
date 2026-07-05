@@ -13,17 +13,38 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
-local RankConfig = require(game:GetService("ReplicatedStorage").Shared.Config.RankConfig)
+local Shared = game:GetService("ReplicatedStorage").Shared
+local RankConfig = require(Shared.Config.RankConfig)
+local WorldConfig = require(Shared.Config.WorldConfig)
 
 local STAND_TAG = "DonationStand"
 local OBBY_FINISH_TAG = "ObbyFinish"
+local CHECKPOINT_TAG = "ObbyCheckpoint"
 local TELEPORTER_PROMPT_TAG = "WorldTeleporterPrompt"
+local PRESTIGE_TAG = "PrestigeStand"
 local STAND_COUNT = 16
 local PLAZA_RADIUS = 90
 
+-- Resolves which world this server instance represents, same pattern as
+-- XPService.currentWorldMultiplier / WorldPopulationService.currentWorldId - falls back
+-- to the first/base world's theme during local testing or before real Place IDs exist
+-- (all placeholders are still 0), so every world doesn't just look like flat gray stone.
+local currentTheme = WorldConfig.Worlds[1].theme
+do
+	for _, world in WorldConfig.Worlds do
+		if world.placeId ~= 0 and world.placeId == game.PlaceId then
+			currentTheme = world.theme
+			break
+		end
+	end
+end
+
 -- The whole plaza floats high above the baseplate. Falling off anywhere on the map
--- (plaza or obby) means a long drop - VoidKillService.luau kills players who fall below
--- WorldBuilderService.KillY.
+-- (plaza or obby) means a long drop - Workspace.FallenPartsDestroyHeight (set in
+-- build() below) destroys anyone who falls below WorldBuilderService.KillY. That's a
+-- native engine property, not a polling script: when a character's parts get destroyed
+-- this way, the Humanoid loses its HumanoidRootPart and transitions to Dead, which
+-- fires the normal death/respawn flow exactly like any other death would.
 local WORLD_Y = 500
 
 local WorldBuilderService = {}
@@ -46,14 +67,14 @@ local function setupAtmosphere()
 	local atmosphere = Instance.new("Atmosphere")
 	atmosphere.Density = 0.3
 	atmosphere.Offset = 0.25
-	atmosphere.Color = Color3.fromRGB(199, 199, 214)
+	atmosphere.Color = currentTheme.skyAmbient
 	atmosphere.Decay = Color3.fromRGB(92, 102, 120)
 	atmosphere.Glare = 0.2
 	atmosphere.Haze = 1.2
 	atmosphere.Parent = Lighting
 
 	Lighting.Brightness = 3
-	Lighting.FogEnd = 100000
+	Lighting.FogEnd = currentTheme.fogEnd
 end
 
 local function buildFloor(parent: Instance)
@@ -63,8 +84,8 @@ local function buildFloor(parent: Instance)
 	floor.Anchored = true
 	floor.Size = Vector3.new(2 * PLAZA_RADIUS + 60, 4, 2 * PLAZA_RADIUS + 60)
 	floor.CFrame = CFrame.new(0, WORLD_Y - 2, 0)
-	floor.Material = Enum.Material.Slate
-	floor.Color = Color3.fromRGB(100, 100, 108)
+	floor.Material = currentTheme.groundMaterial
+	floor.Color = currentTheme.groundColor
 	floor.Parent = parent
 
 	-- Inner arena ring, a lighter material to frame the stand circle.
@@ -102,7 +123,7 @@ local function buildFloor(parent: Instance)
 		cap.Size = Vector3.new(6, 6, 6)
 		cap.CFrame = CFrame.new(x, WORLD_Y + 21, z)
 		cap.Material = Enum.Material.Neon
-		cap.Color = RankConfig.Ranks[1].color
+		cap.Color = currentTheme.accentColor
 		cap.Parent = parent
 	end
 
@@ -124,7 +145,7 @@ local function buildFloor(parent: Instance)
 	monumentOrb.Size = Vector3.new(10, 10, 10)
 	monumentOrb.CFrame = CFrame.new(0, WORLD_Y + 12, 0)
 	monumentOrb.Material = Enum.Material.Neon
-	monumentOrb.Color = Color3.fromRGB(255, 205, 70)
+	monumentOrb.Color = currentTheme.accentColor
 	monumentOrb.Parent = parent
 
 	local spawn = Instance.new("SpawnLocation")
@@ -247,6 +268,117 @@ local function buildTeleporter(parent: Instance)
 	prompt.Parent = pad
 
 	CollectionService:AddTag(prompt, TELEPORTER_PROMPT_TAG)
+end
+
+-- A physical "leaderboard" near spawn showing the server's current top lifetime donors
+-- (see PrestigeStandService.luau, which keeps these updated) - a psychological focal
+-- point players see the moment they spawn in, reinforcing that the richest players are
+-- the visible center of attention. Read-only: donations still route to a player's own
+-- regular stand regardless of whether they're currently shown here.
+local function buildPrestigePedestal(index: number, totalCount: number, parent: Instance)
+	local spreadX = 60
+	local x = -spreadX / 2 + (index - 1) * (spreadX / (totalCount - 1))
+	local z = 40
+	-- The center pedestal (index 1, "#1") stands slightly taller, podium-style.
+	local height = index == 1 and 6 or 4
+
+	local pedestal = Instance.new("Model")
+	pedestal.Name = `PrestigePedestal_{index}`
+
+	local riser = Instance.new("Part")
+	riser.Name = "Riser"
+	riser.Anchored = true
+	riser.CanCollide = true
+	riser.Size = Vector3.new(7, height, 7)
+	riser.CFrame = CFrame.new(x, WORLD_Y + height / 2, z)
+	riser.Material = Enum.Material.Marble
+	riser.Color = Color3.fromRGB(215, 215, 225)
+	riser.Parent = pedestal
+
+	local rankPlate = Instance.new("Part")
+	rankPlate.Name = "RankPlate"
+	rankPlate.Anchored = true
+	rankPlate.CanCollide = false
+	rankPlate.CanQuery = false
+	rankPlate.Shape = Enum.PartType.Cylinder
+	rankPlate.Size = Vector3.new(0.3, 6, 6)
+	rankPlate.CFrame = CFrame.new(x, WORLD_Y + height + 0.15, z) * CFrame.Angles(0, 0, math.rad(90))
+	rankPlate.Material = Enum.Material.Neon
+	rankPlate.Color = Color3.fromRGB(150, 150, 150)
+	rankPlate.Parent = pedestal
+
+	local signPost = Instance.new("Part")
+	signPost.Name = "SignPost"
+	signPost.Anchored = true
+	signPost.CanCollide = false
+	signPost.Size = Vector3.new(0.4, 5, 0.4)
+	signPost.CFrame = CFrame.new(x, WORLD_Y + height + 2.5, z)
+	signPost.Material = Enum.Material.Metal
+	signPost.Color = Color3.fromRGB(60, 60, 65)
+	signPost.Parent = pedestal
+
+	local sign = Instance.new("BillboardGui")
+	sign.Name = "Sign"
+	sign.Size = UDim2.fromOffset(180, 90)
+	sign.StudsOffset = Vector3.new(0, 3.5, 0)
+	sign.AlwaysOnTop = true
+	sign.Parent = signPost
+
+	local rankLabel = Instance.new("TextLabel")
+	rankLabel.Name = "RankLabel"
+	rankLabel.Size = UDim2.new(1, 0, 0, 18)
+	rankLabel.BackgroundTransparency = 1
+	rankLabel.Text = `#{index}`
+	rankLabel.Font = Enum.Font.GothamBold
+	rankLabel.TextScaled = true
+	rankLabel.TextColor3 = Color3.fromRGB(230, 190, 60)
+	rankLabel.Parent = sign
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Name = "NameLabel"
+	nameLabel.Size = UDim2.new(1, 0, 0, 26)
+	nameLabel.Position = UDim2.new(0, 0, 0, 18)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = "Unclaimed"
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextScaled = true
+	nameLabel.TextColor3 = Color3.fromRGB(240, 240, 245)
+	nameLabel.Parent = sign
+
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.Name = "TitleLabel"
+	titleLabel.Size = UDim2.new(1, 0, 0, 20)
+	titleLabel.Position = UDim2.new(0, 0, 0, 44)
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Text = ""
+	titleLabel.Font = Enum.Font.Gotham
+	titleLabel.TextScaled = true
+	titleLabel.TextColor3 = Color3.fromRGB(200, 200, 210)
+	titleLabel.Parent = sign
+
+	local amountLabel = Instance.new("TextLabel")
+	amountLabel.Name = "AmountLabel"
+	amountLabel.Size = UDim2.new(1, 0, 0, 20)
+	amountLabel.Position = UDim2.new(0, 0, 0, 66)
+	amountLabel.BackgroundTransparency = 1
+	amountLabel.Text = ""
+	amountLabel.Font = Enum.Font.Gotham
+	amountLabel.TextScaled = true
+	amountLabel.TextColor3 = Color3.fromRGB(150, 220, 160)
+	amountLabel.Parent = sign
+
+	pedestal.PrimaryPart = riser
+	pedestal.Parent = parent
+
+	CollectionService:AddTag(pedestal, PRESTIGE_TAG)
+	pedestal:SetAttribute("Rank", index)
+end
+
+local function buildPrestigeShowcase(parent: Instance)
+	local count = 5
+	for i = 1, count do
+		buildPrestigePedestal(i, count, parent)
+	end
 end
 
 -- A flat glow ring at the base of the podium. Invisible at tier 1, grows more vivid as
@@ -372,9 +504,10 @@ local function buildStands(parent: Instance)
 end
 
 -- Harder test obby: smaller platforms, bigger gaps, zigzag left/right as well as up/down,
--- a couple of moving platforms, and a long drop to the void below (VoidKillService kills
--- anyone who falls, so missing a jump actually costs something). Real level design is
--- still a builder task - this just makes the mechanic testable.
+-- a couple of moving platforms, and a long drop to the void below (Workspace.
+-- FallenPartsDestroyHeight, set at the bottom of build(), kills anyone who falls, so
+-- missing a jump actually costs something). Real level design is still a builder task -
+-- this just makes the mechanic testable.
 local function buildTestObby(parent: Instance)
 	local obby = Instance.new("Folder")
 	obby.Name = "TestObby"
@@ -386,6 +519,10 @@ local function buildTestObby(parent: Instance)
 	local xOffsets = { 0, 3, -3, 4, -2, 3, -4, 2, -3, 4, -2, 0 }
 
 	local movingPlatformIndices = { [5] = true, [9] = true }
+	-- Missing a jump on a 12-platform course and getting sent all the way back to the
+	-- main spawn is punishing - these two act as mid-course checkpoints instead (see
+	-- CheckpointService.luau), so a death only costs the progress since the last one.
+	local checkpointIndices = { [4] = true, [8] = true }
 
 	for i = 0, platformCount do
 		local platform = Instance.new("Part")
@@ -398,8 +535,8 @@ local function buildTestObby(parent: Instance)
 		local xOffset = xOffsets[(i % #xOffsets) + 1]
 		local basePosition = Vector3.new(startX - i * 13, WORLD_Y + height, xOffset)
 		platform.CFrame = CFrame.new(basePosition)
-		platform.Material = Enum.Material.Wood
-		platform.Color = Color3.fromRGB(150, 110, 70)
+		platform.Material = currentTheme.obbyMaterial
+		platform.Color = currentTheme.obbyColor
 		platform.Parent = obby
 
 		if movingPlatformIndices[i] then
@@ -412,6 +549,10 @@ local function buildTestObby(parent: Instance)
 				{ CFrame = CFrame.new(targetPosition) }
 			)
 			tween:Play()
+		elseif checkpointIndices[i] then
+			platform.Material = Enum.Material.Neon
+			platform.Color = Color3.fromRGB(90, 200, 230)
+			CollectionService:AddTag(platform, CHECKPOINT_TAG)
 		end
 	end
 
@@ -449,8 +590,8 @@ local function buildQuickObby(parent: Instance, courseId: string, direction: Vec
 		platform.CanCollide = true
 		platform.Size = Vector3.new(4, 1, 4)
 		platform.CFrame = CFrame.new(direction * (startOffset + (i - 1) * spacing) + Vector3.new(0, WORLD_Y + height, 0))
-		platform.Material = Enum.Material.Wood
-		platform.Color = Color3.fromRGB(150, 110, 70)
+		platform.Material = currentTheme.obbyMaterial
+		platform.Color = currentTheme.obbyColor
 		platform.Parent = obby
 	end
 
@@ -480,12 +621,18 @@ function WorldBuilderService.build()
 	buildFloor(root)
 	buildDome(root)
 	buildTeleporter(root)
+	buildPrestigeShowcase(root)
 	buildStands(root)
 	buildTestObby(root)
 	-- Diagonal directions (45°/-45°) deliberately avoid the perimeter pillars, which sit
 	-- on a 30°-spaced grid (see buildFloor) - a straight +X/+Z path would run through one.
 	buildQuickObby(root, "quick_obby_1", Vector3.new(1, 0, 1).Unit, { 0, 2, 1, 3 }, 80)
 	buildQuickObby(root, "quick_obby_2", Vector3.new(1, 0, -1).Unit, { 0, 2, 4, 3, 5, 4 }, 130)
+
+	-- Destroys (and, for characters, kills) anything that falls below this height -
+	-- a native engine feature, cheaper and simpler than a polling script that checks
+	-- every player's position on a timer.
+	Workspace.FallenPartsDestroyHeight = WorldBuilderService.KillY
 end
 
 return WorldBuilderService
