@@ -97,6 +97,15 @@ local function updateStandVisual(stand: Model, ownerName: string?, tierOrder: nu
 	end
 end
 
+local function updateRaisedLabel(stand: Model, totalReceived: number?)
+	local signPost = stand:FindFirstChild("SignPost")
+	local billboard = signPost and signPost:FindFirstChild("Sign")
+	local raisedLabel = billboard and billboard:FindFirstChild("RaisedLabel") :: TextLabel?
+	if raisedLabel then
+		raisedLabel.Text = totalReceived and `{totalReceived} R$ raised` or ""
+	end
+end
+
 local function getUnclaimedStand(): Model?
 	for _, instance in CollectionService:GetTagged(STAND_TAG) do
 		if instance:IsA("Model") and (instance:GetAttribute("OwnerUserId") or 0) == 0 then
@@ -121,6 +130,7 @@ local function assignStand(player: Player)
 	local profile = PlayerDataService.get(player)
 	stand:SetAttribute("Tier", tierOrder)
 	updateStandVisual(stand, player.Name, tierOrder, profile and profile.cosmetics.equippedTitle)
+	updateRaisedLabel(stand, profile and profile.stand.totalReceived or 0)
 
 	standByOwner[player] = stand
 end
@@ -132,7 +142,35 @@ local function releaseStand(player: Player)
 		stand:SetAttribute("OwnerName", "")
 		stand:SetAttribute("Tier", 1)
 		updateStandVisual(stand, nil, 1)
+		updateRaisedLabel(stand, nil)
 		standByOwner[player] = nil
+	end
+end
+
+-- Called by DonationService after a successful donation so the sign's "X R$ raised"
+-- updates live instead of only refreshing on next rank-up/rejoin.
+function StandService.refreshRaisedDisplay(player: Player)
+	local stand = standByOwner[player]
+	local profile = PlayerDataService.get(player)
+	if stand and profile then
+		updateRaisedLabel(stand, profile.stand.totalReceived)
+	end
+end
+
+-- Donation-scaled particle burst on the receiver's stand. Called server-side, so the
+-- resulting Emit() replicates to every client automatically - no remote needed.
+function StandService.playPurchaseEffect(player: Player, robuxPrice: number)
+	local stand = standByOwner[player]
+	if not stand then
+		return
+	end
+
+	local podium = stand:FindFirstChild("Podium")
+	local attachment = podium and podium:FindFirstChild("EffectAttachment")
+	local burst = attachment and attachment:FindFirstChild("DonationBurst") :: ParticleEmitter?
+	if burst then
+		local count = math.clamp(math.floor(10 + robuxPrice / 5), 10, 150)
+		burst:Emit(count)
 	end
 end
 
