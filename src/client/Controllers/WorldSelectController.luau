@@ -22,6 +22,8 @@ local RemoteNames = require(Shared.Net.RemoteNames)
 local UICreate = require(Shared.Util.UICreate)
 local Theme = require(Shared.Util.Theme)
 
+local Dock = require(script.Parent.Parent.Dock)
+
 local State = require(script.Parent.Parent.State)
 
 local player = Players.LocalPlayer
@@ -322,8 +324,8 @@ local function buildPanel(hud: ScreenGui): Frame
 
 	local panel = UICreate("Frame", {
 		Name = "WorldPanel",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -20, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 18),
 		Size = UDim2.fromOffset(360, 520),
 		BackgroundColor3 = Theme.Panel,
 		Visible = false,
@@ -454,20 +456,8 @@ function WorldSelectController.start()
 	local hud = getHud()
 	panel = buildPanel(hud)
 
-	local toggleButton = UICreate("TextButton", {
-		Name = "WorldToggle",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -20, 0.5, 0),
-		Size = UDim2.fromOffset(48, 48),
-		BackgroundColor3 = Theme.Panel,
-		Text = "W",
-		Font = Theme.Font,
-		TextSize = 18,
-		TextColor3 = Theme.TextPrimary,
-		Parent = hud,
-	}, { UICreate("UICorner", { CornerRadius = UDim.new(1, 0) }) }) :: TextButton
-
-	toggleButton.MouseButton1Click:Connect(WorldSelectController.toggle)
+	Dock.addButton({ id = "Worlds", icon = "🌍", label = "Worlds", order = 4, accent = Color3.fromRGB(170, 150, 255), onClick = WorldSelectController.toggle })
+	Dock.registerPanel(panel :: Frame)
 
 	-- Rebuild the panel's lock/unlock state whenever the player's level changes,
 	-- preserving whether it was open.
@@ -486,6 +476,7 @@ function WorldSelectController.start()
 		local rebuilt = buildPanel(hud)
 		rebuilt.Visible = wasVisible
 		panel = rebuilt
+		Dock.registerPanel(rebuilt)
 	end)
 
 	Net.get(RemoteNames.Events.WorldTravelDenied).OnClientEvent:Connect(function(reason: string)

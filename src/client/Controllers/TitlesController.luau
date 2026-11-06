@@ -13,6 +13,8 @@ local RemoteNames = require(Shared.Net.RemoteNames)
 local UICreate = require(Shared.Util.UICreate)
 local Theme = require(Shared.Util.Theme)
 
+local Dock = require(script.Parent.Parent.Dock)
+
 local player = Players.LocalPlayer
 
 type CosmeticsPayload = { ownedTitles: { string }, equippedTitle: string?, showChatTag: boolean }
@@ -94,8 +96,8 @@ end
 local function buildPanel(hud: ScreenGui): Frame
 	local panel = UICreate("Frame", {
 		Name = "TitlesPanel",
-		AnchorPoint = Vector2.new(0, 0),
-		Position = UDim2.new(0, 20, 0, 90),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 18),
 		Size = UDim2.fromOffset(300, 360),
 		BackgroundColor3 = Theme.Panel,
 		Visible = false,
@@ -146,22 +148,7 @@ function TitlesController.start()
 	local hud = getHud()
 	local panel = buildPanel(hud)
 
-	local toggleButton = UICreate("TextButton", {
-		Name = "TitlesToggle",
-		AnchorPoint = Vector2.new(0, 0),
-		Position = UDim2.new(0, 20, 0, 20),
-		Size = UDim2.fromOffset(48, 48),
-		BackgroundColor3 = Theme.Panel,
-		Text = "T",
-		Font = Theme.Font,
-		TextSize = 18,
-		TextColor3 = Theme.TextPrimary,
-		Parent = hud,
-	}, { UICreate("UICorner", { CornerRadius = UDim.new(1, 0) }) }) :: TextButton
-
-	toggleButton.MouseButton1Click:Connect(function()
-		panel.Visible = not panel.Visible
-	end)
+	Dock.addButton({ id = "Titles", icon = "👑", label = "Titles", order = 5, accent = Color3.fromRGB(255, 190, 90), panel = panel })
 
 	Net.get(RemoteNames.Events.CosmeticsUpdated).OnClientEvent:Connect(renderCosmetics)
 end

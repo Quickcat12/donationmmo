@@ -289,3 +289,17 @@ Done offline. Everything type-checks with luau-lsp; nothing has been play-tested
   require(game.ServerScriptService.Server.Dev.LobbyAssetImporter:Clone())()
   Then save ServerStorage.LobbyAssets to assets/LobbyAssets.rbxm and map it in
   default.project.json. Don't map it before that file exists, or Rojo will empty the folder.
+
+### Later the same day (Studio session)
+- Play-tested in Studio on the real experience (GameId 10439890130, place 83308240806095).
+  Fixed the boot crash: FallenPartsDestroyHeight can't be set by scripts. It's now -200 in
+  default.project.json.
+- Blender props imported (uploaded as Fire Ablaze) → assets/LobbyAssets.rbxm, mapped to
+  ServerStorage.LobbyAssets.
+- Mobile: the letter buttons are replaced by src/client/Dock.luau, an icon + label dock.
+  It's a single bottom row on short screens and a left column on tall ones. Panels are
+  centered, one open at a time, with a close button, and scale to the viewport.
+  Checked in the iPhone 17 Pro simulator, landscape and portrait.
+- Still to do: set Max Players to 30 on Creator Hub (Configure → Places → server size);
+  it's currently 60. Turn on Allow HTTP Requests if the gamepass auto-discovery
+  (roproxy) should work. Publishing hasn't happened; the owner decides when.

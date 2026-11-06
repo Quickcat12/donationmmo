@@ -94,7 +94,8 @@ local function setMarker(stand: Model?)
 	end
 	marker = UICreate("BillboardGui", {
 		Name = "YourBoothMarker",
-		Size = UDim2.fromOffset(150, 36),
+		-- Sized in studs so it shrinks with distance instead of covering the view.
+		Size = UDim2.fromScale(8, 2),
 		StudsOffset = Vector3.new(0, 15.5, 0),
 		AlwaysOnTop = true,
 		LightInfluence = 0,
@@ -109,7 +110,7 @@ local function setMarker(stand: Model?)
 			TextColor3 = Theme.Background,
 		}, {
 			UICreate("UICorner", { CornerRadius = UDim.new(1, 0) }),
-			UICreate("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6) }),
+			UICreate("UIPadding", { PaddingTop = UDim.new(0.15, 0), PaddingBottom = UDim.new(0.15, 0) }),
 		}),
 	}) :: BillboardGui
 end
@@ -129,6 +130,14 @@ local function refresh()
 		return
 	end
 	clearGuide()
+	-- Your own booth shouldn't offer you a "Donate" prompt (the server ignores
+	-- self-donations anyway); prompts are per-client, so hide it locally.
+	for _, other in CollectionService:GetTagged(STAND_TAG) do
+		local prompt = other:FindFirstChild("DonatePrompt", true)
+		if prompt and prompt:IsA("ProximityPrompt") then
+			prompt.Enabled = other ~= stand
+		end
+	end
 	currentStand = stand
 	arrived = false
 	setMarker(stand)

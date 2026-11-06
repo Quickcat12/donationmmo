@@ -256,6 +256,10 @@ local function materialFor(x: number, z: number, h: number): Enum.Material
 	if h < 3.2 then
 		return Enum.Material.Sand
 	end
+	-- Under the paved plaza: no grass, or its blades poke up through the paving parts.
+	if x * x + z * z < (PLAZA_RADIUS + 3) ^ 2 then
+		return Enum.Material.Pavement
+	end
 	if pathMask(x, z) and h < GROUND_Y + 1.5 then
 		return Enum.Material.Cobblestone
 	end
@@ -604,11 +608,14 @@ end
 -- / TitleLabel / RaisedLabel, optional TierRing and Canopy). See StandService.
 ------------------------------------------------------------------------------------
 
+-- y/height are fractions of the sign. Signs are sized in studs (UDim2 scale on a
+-- BillboardGui), so they shrink with distance like real signage; pixel-sized signs
+-- stay huge from across the plaza and 30 of them bury the view.
 local function signLabel(name: string, y: number, height: number, font: Enum.Font, color: Color3, parent: Instance): TextLabel
 	local label = Instance.new("TextLabel")
 	label.Name = name
-	label.Size = UDim2.new(1, 0, 0, height)
-	label.Position = UDim2.fromOffset(0, y)
+	label.Size = UDim2.fromScale(1, height)
+	label.Position = UDim2.fromScale(0, y)
 	label.BackgroundTransparency = 1
 	label.Font = font
 	label.TextScaled = true
@@ -726,14 +733,14 @@ local function buildBooth(parent: Instance, index: number, standCf: CFrame)
 	})
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "Sign"
-	billboard.Size = UDim2.fromOffset(220, 92)
-	billboard.StudsOffset = Vector3.new(0, 1.5, 0)
-	billboard.MaxDistance = 170
+	billboard.Size = UDim2.fromScale(9, 3.8)
+	billboard.StudsOffset = Vector3.new(0, 1.2, 0)
+	billboard.MaxDistance = 220
 	billboard.LightInfluence = 0
 	billboard.Parent = signPost
-	signLabel("OwnerLabel", 0, 36, Enum.Font.GothamBold, Color3.fromRGB(245, 245, 248), billboard).Text = "Empty Booth"
-	signLabel("TitleLabel", 36, 24, Enum.Font.GothamMedium, Color3.fromRGB(180, 180, 185), billboard)
-	signLabel("RaisedLabel", 62, 26, Enum.Font.GothamBold, Color3.fromRGB(255, 205, 70), billboard)
+	signLabel("OwnerLabel", 0, 0.4, Enum.Font.GothamBold, Color3.fromRGB(245, 245, 248), billboard).Text = "Empty Booth"
+	signLabel("TitleLabel", 0.4, 0.27, Enum.Font.GothamMedium, Color3.fromRGB(180, 180, 185), billboard)
+	signLabel("RaisedLabel", 0.68, 0.3, Enum.Font.GothamBold, Color3.fromRGB(255, 205, 70), billboard)
 
 	local effectAttachment = Instance.new("Attachment")
 	effectAttachment.Name = "EffectAttachment"
@@ -964,9 +971,10 @@ local function buildPortal(parent: Instance)
 		Shape = Enum.PartType.Cylinder,
 		Size = Vector3.new(0.6, 15, 15),
 		CFrame = CFrame.new(0, y + 10, baseZ) * CFrame.Angles(0, math.rad(90), 0),
-		Material = Enum.Material.Neon,
-		Color = Color3.fromRGB(150, 175, 230),
-		Transparency = 0.3,
+		-- Glass, not Neon: Neon plus bloom washes the disc out to a flat white blob.
+		Material = Enum.Material.Glass,
+		Color = Color3.fromRGB(120, 140, 220),
+		Transparency = 0.35,
 		CanCollide = false,
 		CanQuery = false,
 		Parent = folder,
@@ -988,7 +996,7 @@ local function buildPortal(parent: Instance)
 	end)
 
 	local label = Instance.new("BillboardGui")
-	label.Size = UDim2.fromOffset(280, 54)
+	label.Size = UDim2.fromScale(20, 4)
 	label.StudsOffset = Vector3.new(0, 13, 0)
 	label.MaxDistance = 220
 	label.LightInfluence = 0
@@ -1063,14 +1071,14 @@ local function buildPrestigePedestal(parent: Instance, index: number, total: num
 	})
 	local sign = Instance.new("BillboardGui")
 	sign.Name = "Sign"
-	sign.Size = UDim2.fromOffset(180, 90)
+	sign.Size = UDim2.fromScale(7, 3.6)
 	sign.MaxDistance = 160
 	sign.LightInfluence = 0
 	sign.Parent = signPost
-	signLabel("RankLabel", 0, 18, Enum.Font.GothamBold, Color3.fromRGB(230, 190, 60), sign).Text = `#{index} DONOR`
-	signLabel("NameLabel", 18, 26, Enum.Font.GothamBold, Color3.fromRGB(240, 240, 245), sign).Text = "Unclaimed"
-	signLabel("TitleLabel", 44, 20, Enum.Font.Gotham, Color3.fromRGB(200, 200, 210), sign)
-	signLabel("AmountLabel", 66, 20, Enum.Font.Gotham, Color3.fromRGB(150, 220, 160), sign)
+	signLabel("RankLabel", 0, 0.2, Enum.Font.GothamBold, Color3.fromRGB(230, 190, 60), sign).Text = `#{index} DONOR`
+	signLabel("NameLabel", 0.2, 0.3, Enum.Font.GothamBold, Color3.fromRGB(240, 240, 245), sign).Text = "Unclaimed"
+	signLabel("TitleLabel", 0.5, 0.22, Enum.Font.Gotham, Color3.fromRGB(200, 200, 210), sign)
+	signLabel("AmountLabel", 0.73, 0.22, Enum.Font.Gotham, Color3.fromRGB(150, 220, 160), sign)
 
 	pedestal.PrimaryPart = riser
 	pedestal.Parent = parent
@@ -1297,7 +1305,7 @@ local function finishPad(parent: Instance, position: Vector3, courseId: string, 
 	CollectionService:AddTag(pad, TAGS.obbyFinish)
 
 	local board = Instance.new("BillboardGui")
-	board.Size = UDim2.fromOffset(200, 44)
+	board.Size = UDim2.fromScale(10, 2.4)
 	board.StudsOffset = Vector3.new(0, 5, 0)
 	board.MaxDistance = 180
 	board.LightInfluence = 0
@@ -1323,7 +1331,7 @@ local function startSign(parent: Instance, position: Vector3, text: string)
 		Parent = parent,
 	})
 	local board = Instance.new("BillboardGui")
-	board.Size = UDim2.fromOffset(200, 50)
+	board.Size = UDim2.fromScale(9, 2.4)
 	board.StudsOffset = Vector3.new(0, 4.5, 0)
 	board.MaxDistance = 120
 	board.LightInfluence = 0

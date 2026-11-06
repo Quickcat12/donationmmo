@@ -671,13 +671,19 @@ function WorldBuilderService.build()
 		if baseplate then
 			baseplate:Destroy()
 		end
+		-- Likewise the template's SpawnLocation at the origin: it sits inside the
+		-- fountain and Roblox picks randomly between spawns. The island has its own.
+		for _, child in Workspace:GetChildren() do
+			if child:IsA("SpawnLocation") then
+				child:Destroy()
+			end
+		end
 		local root = Instance.new("Folder")
 		root.Name = "GeneratedWorld"
 		root.Parent = Workspace
 		IslandBuilder.build(root)
 		WorldBuilderService.WorldY = IslandBuilder.GroundY
 		WorldBuilderService.KillY = IslandBuilder.KillY
-		Workspace.FallenPartsDestroyHeight = IslandBuilder.KillY
 		return
 	end
 
@@ -701,7 +707,9 @@ function WorldBuilderService.build()
 	-- Destroys (and, for characters, kills) anything that falls below this height -
 	-- a native engine feature, cheaper and simpler than a polling script that checks
 	-- every player's position on a timer.
-	Workspace.FallenPartsDestroyHeight = WorldBuilderService.KillY
+	-- FallenPartsDestroyHeight can't be written by game scripts (plugin capability only);
+	-- it's set to -200 in default.project.json. Sky-plaza worlds still respawn on falling,
+	-- just after a longer drop.
 end
 
 return WorldBuilderService

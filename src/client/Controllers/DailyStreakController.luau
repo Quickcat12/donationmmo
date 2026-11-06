@@ -38,14 +38,18 @@ local function build()
 		Parent = player:WaitForChild("PlayerGui"),
 	}) :: ScreenGui
 
+	-- Lives inside the HUD bar's frame (just left of it) so it scales and moves with it.
+	local playerGui = player:WaitForChild("PlayerGui")
+	local hud = playerGui:WaitForChild("HUD")
+	local bar = hud:WaitForChild("XPBarContainer")
 	local chip = UICreate("Frame", {
 		Name = "StreakChip",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(0.5, -238, 0, 10),
+		Position = UDim2.new(0, -8, 0, 0),
 		Size = UDim2.fromOffset(74, 60),
 		BackgroundColor3 = Theme.Panel,
 		BackgroundTransparency = 0.08,
-		Parent = gui,
+		Parent = bar,
 	}, {
 		UICreate("UICorner", { CornerRadius = UDim.new(0, 12) }),
 		UICreate("UIStroke", { Color = FLAME, Transparency = 0.55, Thickness = 1.5 }),

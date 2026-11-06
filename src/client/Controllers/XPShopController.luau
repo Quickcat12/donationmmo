@@ -16,6 +16,8 @@ local RemoteNames = require(Shared.Net.RemoteNames)
 local UICreate = require(Shared.Util.UICreate)
 local Theme = require(Shared.Util.Theme)
 
+local Dock = require(script.Parent.Parent.Dock)
+
 local player = Players.LocalPlayer
 
 local XPShopController = {}
@@ -53,8 +55,8 @@ local function buildPanel(hud: ScreenGui): Frame
 
 	local panel = UICreate("Frame", {
 		Name = "XPShopPanel",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 20, 1, -90),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 18),
 		Size = UDim2.fromOffset(280, 50 + listHeight + vipSectionHeight + boostSectionHeight),
 		BackgroundColor3 = Theme.Panel,
 		Visible = false,
@@ -166,7 +168,7 @@ local function buildPanel(hud: ScreenGui): Frame
 		Position = UDim2.fromOffset(10, 54 + listHeight),
 		Size = UDim2.new(1, -20, 0, vipSectionHeight - 10),
 		BackgroundColor3 = Theme.Accent,
-		Text = `VIP: +{math.floor((VIPConfig.XpMultiplier - 1) * 100)}% XP forever`,
+		Text = `VIP: +{math.round((VIPConfig.XpMultiplier - 1) * 100)}% XP forever`,
 		TextWrapped = true,
 		Font = Theme.Font,
 		TextSize = 14,
@@ -176,7 +178,7 @@ local function buildPanel(hud: ScreenGui): Frame
 
 	local function refreshVipButton()
 		local owned = player:GetAttribute("VIPOwned") == true
-		vipButton.Text = owned and "VIP: Active" or `VIP: +{math.floor((VIPConfig.XpMultiplier - 1) * 100)}% XP forever - {VIPConfig.Name}`
+		vipButton.Text = owned and "VIP: Active" or `VIP: +{math.round((VIPConfig.XpMultiplier - 1) * 100)}% XP forever - {VIPConfig.Name}`
 		vipButton.Active = not owned
 		vipButton.BackgroundColor3 = owned and Theme.PanelLight or Theme.Accent
 		vipButton.TextColor3 = owned and Theme.TextSecondary or Theme.Background
@@ -225,22 +227,7 @@ function XPShopController.start()
 	local hud = getHud()
 	local panel = buildPanel(hud)
 
-	local toggleButton = UICreate("TextButton", {
-		Name = "XPShopToggle",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 20, 1, -20),
-		Size = UDim2.fromOffset(48, 48),
-		BackgroundColor3 = Theme.Panel,
-		Text = "XP",
-		Font = Theme.Font,
-		TextSize = 14,
-		TextColor3 = Theme.TextPrimary,
-		Parent = hud,
-	}, { UICreate("UICorner", { CornerRadius = UDim.new(1, 0) }) }) :: TextButton
-
-	toggleButton.MouseButton1Click:Connect(function()
-		panel.Visible = not panel.Visible
-	end)
+	Dock.addButton({ id = "Shop", icon = "🛒", label = "Shop", order = 1, accent = Theme.Accent, panel = panel })
 end
 
 return XPShopController

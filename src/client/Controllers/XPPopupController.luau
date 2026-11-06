@@ -15,6 +15,8 @@ local RemoteNames = require(Shared.Net.RemoteNames)
 local UICreate = require(Shared.Util.UICreate)
 local Theme = require(Shared.Util.Theme)
 
+local Dock = require(script.Parent.Parent.Dock)
+
 local player = Players.LocalPlayer
 
 local XPPopupController = {}
@@ -84,6 +86,9 @@ local function build()
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	}) :: Frame
+
+	Dock.autoScale(popupLayer)
+	Dock.autoScale(toastStack)
 
 	popSound = Instance.new("Sound")
 	popSound.SoundId = "rbxasset://sounds/electronicpingshort.wav"

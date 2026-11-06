@@ -14,6 +14,8 @@ local RemoteNames = require(Shared.Net.RemoteNames)
 local UICreate = require(Shared.Util.UICreate)
 local Theme = require(Shared.Util.Theme)
 
+local Dock = require(script.Parent.Parent.Dock)
+
 local player = Players.LocalPlayer
 
 type QuestSnapshotEntry = {
@@ -170,6 +172,14 @@ local function ensureSectionHeader(kind: string, layoutOrder: number)
 end
 
 local function renderQuests(quests: { QuestSnapshotEntry })
+	-- Red count on the dock's Quests button: finished dailies waiting to be claimed.
+	local claimable = 0
+	for _, quest in quests do
+		if quest.kind ~= "journal" and not quest.completed and quest.progress >= quest.goalCount then
+			claimable += 1
+		end
+	end
+	Dock.setBadge("Quests", claimable)
 	for index, quest in quests do
 		local kind = quest.kind or "daily"
 		-- Dailies sort first (orders 1..), the journal after a gap; headers sit at the
@@ -188,8 +198,8 @@ end
 local function buildPanel(hud: ScreenGui)
 	panel = UICreate("Frame", {
 		Name = "QuestPanel",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 20, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 18),
 		Size = UDim2.fromOffset(320, 420),
 		BackgroundColor3 = Theme.Panel,
 		Visible = false,
@@ -219,22 +229,7 @@ local function buildPanel(hud: ScreenGui)
 		UICreate("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
 	}) :: ScrollingFrame
 
-	local toggleButton = UICreate("TextButton", {
-		Name = "QuestToggle",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 20, 0.5, 0),
-		Size = UDim2.fromOffset(48, 48),
-		BackgroundColor3 = Theme.Panel,
-		Text = "Q",
-		Font = Theme.Font,
-		TextSize = 18,
-		TextColor3 = Theme.TextPrimary,
-		Parent = hud,
-	}, { UICreate("UICorner", { CornerRadius = UDim.new(1, 0) }) }) :: TextButton
-
-	toggleButton.MouseButton1Click:Connect(function()
-		panel.Visible = not panel.Visible
-	end)
+	Dock.addButton({ id = "Quests", icon = "📜", label = "Quests", order = 2, accent = Color3.fromRGB(120, 220, 255), panel = panel })
 end
 
 function QuestController.start()

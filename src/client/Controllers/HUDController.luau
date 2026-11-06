@@ -19,6 +19,7 @@ local UICreate = require(Shared.Util.UICreate)
 local Theme = require(Shared.Util.Theme)
 
 local State = require(script.Parent.Parent.State)
+local Dock = require(script.Parent.Parent.Dock)
 
 local player = Players.LocalPlayer
 
@@ -143,7 +144,7 @@ local function build()
 	dutyLabel = UICreate("TextLabel", {
 		Name = "BoothDuty",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 76),
+		Position = UDim2.new(0.5, 0, 1, 6),
 		Size = UDim2.fromOffset(330, 22),
 		BackgroundColor3 = Theme.Panel,
 		BackgroundTransparency = 0.25,
@@ -152,8 +153,11 @@ local function build()
 		TextSize = 12,
 		TextColor3 = Theme.TextSecondary,
 		Visible = false,
-		Parent = screenGui,
+		Parent = container,
 	}, { UICreate("UICorner", { CornerRadius = UDim.new(1, 0) }) }) :: TextLabel
+
+	-- The bar is designed at 1080p; on a landscape phone it scales down with the dock.
+	Dock.autoScale(container :: Frame, 0.62)
 end
 
 local function refresh()

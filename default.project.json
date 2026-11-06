@@ -21,7 +21,8 @@
     },
     "Workspace": {
       "$properties": {
-        "FilteringEnabled": true
+        "FilteringEnabled": true,
+        "FallenPartsDestroyHeight": -200
       }
     },
     "Lighting": {
@@ -46,6 +47,11 @@
     "SoundService": {
       "$properties": {
         "RespectFilteringEnabled": true
+      }
+    },
+    "ServerStorage": {
+      "LobbyAssets": {
+        "$path": "assets/LobbyAssets.rbxm"
       }
     }
   }

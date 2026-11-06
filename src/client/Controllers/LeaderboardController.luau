@@ -11,6 +11,8 @@ local RemoteNames = require(Shared.Net.RemoteNames)
 local UICreate = require(Shared.Util.UICreate)
 local Theme = require(Shared.Util.Theme)
 
+local Dock = require(script.Parent.Parent.Dock)
+
 local player = Players.LocalPlayer
 
 type LeaderboardEntry = { userId: number, name: string, value: number }
@@ -55,8 +57,8 @@ end
 local function buildPanel(hud: ScreenGui)
 	panel = UICreate("Frame", {
 		Name = "LeaderboardPanel",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 80),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 18),
 		Size = UDim2.fromOffset(360, 340),
 		BackgroundColor3 = Theme.Panel,
 		Visible = false,
@@ -97,22 +99,7 @@ local function buildPanel(hud: ScreenGui)
 		Parent = panel,
 	}) :: Frame
 
-	local toggleButton = UICreate("TextButton", {
-		Name = "LeaderboardToggle",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -20),
-		Size = UDim2.fromOffset(48, 48),
-		BackgroundColor3 = Theme.Panel,
-		Text = "L",
-		Font = Theme.Font,
-		TextSize = 18,
-		TextColor3 = Theme.TextPrimary,
-		Parent = hud,
-	}, { UICreate("UICorner", { CornerRadius = UDim.new(1, 0) }) }) :: TextButton
-
-	toggleButton.MouseButton1Click:Connect(function()
-		panel.Visible = not panel.Visible
-	end)
+	Dock.addButton({ id = "Top", icon = "🏆", label = "Top", order = 6, accent = Color3.fromRGB(255, 215, 90), panel = panel })
 end
 
 function LeaderboardController.start()

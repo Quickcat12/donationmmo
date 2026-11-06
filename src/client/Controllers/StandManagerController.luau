@@ -13,6 +13,8 @@ local RemoteNames = require(Shared.Net.RemoteNames)
 local UICreate = require(Shared.Util.UICreate)
 local Theme = require(Shared.Util.Theme)
 
+local Dock = require(script.Parent.Parent.Dock)
+
 local player = Players.LocalPlayer
 
 local MAX_SLOTS = 6
@@ -156,8 +158,8 @@ end
 local function buildPanel(hud: ScreenGui): Frame
 	local panel = UICreate("Frame", {
 		Name = "StandManagerPanel",
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -20, 1, -90),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 18),
 		Size = UDim2.fromOffset(340, 448),
 		BackgroundColor3 = Theme.Panel,
 		Visible = false,
@@ -309,22 +311,7 @@ function StandManagerController.start()
 	local hud = getHud()
 	local panel = buildPanel(hud)
 
-	local toggleButton = UICreate("TextButton", {
-		Name = "StandManagerToggle",
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -20, 1, -20),
-		Size = UDim2.fromOffset(48, 48),
-		BackgroundColor3 = Theme.Panel,
-		Text = "S",
-		Font = Theme.Font,
-		TextSize = 18,
-		TextColor3 = Theme.TextPrimary,
-		Parent = hud,
-	}, { UICreate("UICorner", { CornerRadius = UDim.new(1, 0) }) }) :: TextButton
-
-	toggleButton.MouseButton1Click:Connect(function()
-		panel.Visible = not panel.Visible
-	end)
+	Dock.addButton({ id = "Booth", icon = "🏪", label = "My Booth", order = 3, accent = Theme.Success, panel = panel })
 
 	Net.get(RemoteNames.Events.SetDonationGamepassResult).OnClientEvent:Connect(function(result)
 		local label = slotLabels[result.slot]
