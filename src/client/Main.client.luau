@@ -3,6 +3,10 @@
 local Controllers = script.Parent.Controllers
 
 require(Controllers.HUDController).start()
+require(Controllers.XPPopupController).start()
+require(Controllers.DailyStreakController).start()
+require(Controllers.DiscoveryController).start()
+require(Controllers.BoothGuideController).start()
 require(Controllers.RankUpController).start()
 require(Controllers.DonationController).start()
 require(Controllers.StandManagerController).start()

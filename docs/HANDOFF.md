@@ -266,3 +266,26 @@ obbies.
 - `.gitignore` excludes `*.rbxl`/`*.rbxlx`, `sourcemap.json`, and `__pycache__/`.
 - Be straight with the owner about what was and wasn't verified. They appreciated being
   told when reviewer suggestions were wrong instead of having everything rubber-stamped.
+
+## 9. Session 2026-11-06 (local) — what changed
+
+Done offline. Everything type-checks with luau-lsp; nothing has been play-tested in Studio yet.
+- Bugs fixed: post-Celestial levels keep climbing (8,000 XP/level), so celestial_apex is reachable;
+  STAND_COUNT 30; WorldSelect only rebuilds on level change; productId 0 guarded on client and
+  server; ProcessReceipt now refuses to grant without a loaded profile and dedupes PurchaseIds;
+  checkpoints clear on finish and expire after 10 minutes; Blessing stacks its duration instead
+  of resetting it.
+- Economy fix: XP Shop XP is fixed-rate (VIP only). Rank, world and Blessing multipliers no
+  longer apply to it, so donating overtakes the shop around Gold, as the concept requires.
+- Leaderstats: Rank / Donated / Raised (no raw level).
+- Rewards: +XP popups for every gain, daily login streak (7-day track), playtime and booth-duty
+  XP (daily-capped), 8 discoverable landmarks with "?" markers, Island Journal one-time quests
+  (some unlock titles), public rank-promotion announcements, booth guide beam.
+- World 1: src/server/World/IslandBuilder.luau builds a terrain island at sea level with 30
+  booths, plaza and fountain, pier spawn, lighthouse, three islet obbies. It uses
+  ServerStorage.LobbyAssets meshes when present, otherwise primitives.
+- Art: art/blender/lobby_props.py → art/blender/out/lobby_props.glb (13 props). Import with
+  File > Import 3D, then run in the command bar:
+  require(game.ServerScriptService.Server.Dev.LobbyAssetImporter:Clone())()
+  Then save ServerStorage.LobbyAssets to assets/LobbyAssets.rbxm and map it in
+  default.project.json. Don't map it before that file exists, or Rojo will empty the folder.

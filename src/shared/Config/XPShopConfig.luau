@@ -36,6 +36,9 @@ XPShopConfig.Items = {
 } :: { XPShopItem }
 
 function XPShopConfig.getItemByProductId(productId: number): XPShopItem?
+	if productId == 0 then
+		return nil
+	end
 	for _, item in XPShopConfig.Items do
 		if item.productId == productId then
 			return item

@@ -34,7 +34,7 @@ local function getStack(hud: ScreenGui): Frame
 	return UICreate("Frame", {
 		Name = "JoinAnnouncementStack",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 76),
+		Position = UDim2.new(0.5, 0, 0, 132),
 		Size = UDim2.fromOffset(420, 300),
 		BackgroundTransparency = 1,
 		Parent = hud,
@@ -47,7 +47,7 @@ local function getStack(hud: ScreenGui): Frame
 	}) :: Frame
 end
 
-local function showAnnouncement(payload: JoinAnnouncement)
+local function showAnnouncement(payload: JoinAnnouncement, verb: string?)
 	if payload.userId == player.UserId then
 		return -- don't announce yourself to yourself
 	end
@@ -59,7 +59,8 @@ local function showAnnouncement(payload: JoinAnnouncement)
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = Theme.Panel,
 		BackgroundTransparency = 1,
-		Text = `[{string.upper(payload.rankName)}] {payload.name} has joined the server`,
+		Text = verb == "promoted" and `[{string.upper(payload.rankName)}] {payload.name} was promoted to {payload.rankName}!`
+			or `[{string.upper(payload.rankName)}] {payload.name} has joined the server`,
 		TextWrapped = true,
 		Font = Theme.Font,
 		TextSize = 14,
@@ -85,7 +86,12 @@ local function showAnnouncement(payload: JoinAnnouncement)
 end
 
 function JoinAnnouncementController.start()
-	Net.get(RemoteNames.Events.PlayerJoinedAnnouncement).OnClientEvent:Connect(showAnnouncement)
+	Net.get(RemoteNames.Events.PlayerJoinedAnnouncement).OnClientEvent:Connect(function(payload)
+		showAnnouncement(payload, "joined")
+	end)
+	Net.get(RemoteNames.Events.RankPromotionAnnouncement).OnClientEvent:Connect(function(payload)
+		showAnnouncement(payload, "promoted")
+	end)
 end
 
 return JoinAnnouncementController

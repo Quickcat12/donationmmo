@@ -142,6 +142,27 @@ local function onRankChanged(player: Player, _oldRank: RankInfo, newRank: RankIn
 	applyAttributes(player, profile)
 	CosmeticService.refreshOverhead(player)
 	pushCosmetics(player, profile)
+
+	-- Promotions are public. Every Gray in the server seeing "X was promoted to Green"
+	-- makes the next color feel one step away, which is the aspiration the ladder needs.
+	Net.get(RemoteNames.Events.RankPromotionAnnouncement):FireAllClients({
+		userId = player.UserId,
+		name = player.Name,
+		rankName = newRank.name,
+		rankColor = newRank.color,
+		title = newRank.title,
+	})
+end
+
+-- Non-rank titles (Island Explorer, Devoted, ...) come from the journal. They don't
+-- auto-equip: a rank title is the class identity, an achievement title is opt-in flair.
+function CosmeticService.grantTitle(player: Player, title: string)
+	local profile = PlayerDataService.get(player)
+	if not profile or table.find(profile.cosmetics.ownedTitles, title) then
+		return
+	end
+	table.insert(profile.cosmetics.ownedTitles, title)
+	pushCosmetics(player, profile)
 end
 
 local function onRequestEquipTitle(player: Player, title: unknown)

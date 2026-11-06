@@ -26,6 +26,12 @@ export type RemoteName =
 	| "ServerBoostActivated"
 	| "RequestDiscoverGamepasses"
 	| "DiscoverGamepassesResult"
+	| "Notify"
+	| "RankPromotionAnnouncement"
+	| "DailyStreakUpdated"
+	| "DiscoveryFound"
+	| "DiscoveriesUpdated"
+	| "SessionRewardTick"
 
 local RemoteNames = {
 	Events = {
@@ -51,6 +57,12 @@ local RemoteNames = {
 		RequestBuyServerBoost = "RequestBuyServerBoost", -- client -> server, player wants to prompt purchase of the server-wide XP boost Developer Product
 		ServerBoostActivated = "ServerBoostActivated", -- server -> client, someone just bought the server-wide XP boost
 		RequestDiscoverGamepasses = "RequestDiscoverGamepasses", -- client -> server, player wants to auto-list Gamepasses from their own public games instead of pasting IDs
+		Notify = "Notify", -- server -> client, generic toast { text, color }
+		RankPromotionAnnouncement = "RankPromotionAnnouncement", -- server -> all clients, someone reached a new rank
+		DailyStreakUpdated = "DailyStreakUpdated", -- server -> client, login streak state (+ reward when just claimed)
+		DiscoveryFound = "DiscoveryFound", -- server -> client, player found a landmark for the first time
+		DiscoveriesUpdated = "DiscoveriesUpdated", -- server -> client, full set of found landmark ids (on join)
+		SessionRewardTick = "SessionRewardTick", -- server -> client, next playtime payout timing + whether the player is on booth duty
 		DiscoverGamepassesResult = "DiscoverGamepassesResult", -- server -> client, the discovered list (or an error reason)
 	} :: { [string]: string },
 }

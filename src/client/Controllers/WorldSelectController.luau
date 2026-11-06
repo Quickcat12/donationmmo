@@ -471,7 +471,14 @@ function WorldSelectController.start()
 
 	-- Rebuild the panel's lock/unlock state whenever the player's level changes,
 	-- preserving whether it was open.
+	-- State.Changed fires on every XP gain; only a level change can flip a world's
+	-- lock state, so skip the (expensive) full rebuild otherwise.
+	local builtForLevel = State.level
 	State.Changed:Connect(function()
+		if State.level == builtForLevel then
+			return
+		end
+		builtForLevel = State.level
 		local current = panel :: Frame
 		local wasVisible = current.Visible
 		current:Destroy()

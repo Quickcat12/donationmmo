@@ -10,15 +10,23 @@ local State = {
 	level = 1,
 	rank = "Gray",
 	progress = 0,
+	multiplier = 1, -- combined multiplier a donation would get right now
+	xpToNext = nil :: number?, -- XP left to the next rank; nil at the top rank
 }
 
 State.Changed = Signal.new()
 
-function State.update(payload: { xp: number, level: number, rank: string, progress: number })
+function State.update(payload: { [string]: any })
 	State.xp = payload.xp
 	State.level = payload.level
 	State.rank = payload.rank
 	State.progress = payload.progress
+	State.xpToNext = payload.xpToNext
+	-- `multiplier` in a payload is that one grant's; the HUD shows what a donation
+	-- would earn right now, which changes with rank, VIP and server blessings.
+	if type(payload.donationMultiplier) == "number" then
+		State.multiplier = payload.donationMultiplier
+	end
 	State.Changed:Fire()
 end
 

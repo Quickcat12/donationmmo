@@ -114,6 +114,7 @@ local function onRequestSetDonationGamepass(player: Player, slot: unknown, gamep
 	end
 
 	table.insert(donationGamepasses, { gamepassId = gamepassId, slot = slot })
+	QuestService.reportProgress(player, "link_gamepass")
 	resultEvent:FireClient(player, {
 		success = true,
 		slot = slot,
@@ -183,6 +184,8 @@ local function onReportGamepassDonation(donor: Player, receiverUserId: unknown, 
 	receiverProfile.stand.totalReceived += robuxPrice
 
 	StandService.refreshRaisedDisplay(receiver)
+	XPService.refreshDonationStats(donor)
+	XPService.refreshDonationStats(receiver)
 	StandService.playPurchaseEffect(receiver, robuxPrice)
 
 	XPService.grantXp(receiver, math.floor(donorXp * 0.35), "donation_received")

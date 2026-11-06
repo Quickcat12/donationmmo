@@ -22,7 +22,9 @@ local OBBY_FINISH_TAG = "ObbyFinish"
 local CHECKPOINT_TAG = "ObbyCheckpoint"
 local TELEPORTER_PROMPT_TAG = "WorldTeleporterPrompt"
 local PRESTIGE_TAG = "PrestigeStand"
-local STAND_COUNT = 16
+-- Every player needs a booth, so this must be >= the place's Max Players (Studio game
+-- setting). 30 matches World 1's island and its Max Players.
+local STAND_COUNT = 30
 local PLAZA_RADIUS = 90
 
 -- Resolves which world this server instance represents, same pattern as
@@ -30,14 +32,18 @@ local PLAZA_RADIUS = 90
 -- to the first/base world's theme during local testing or before real Place IDs exist
 -- (all placeholders are still 0), so every world doesn't just look like flat gray stone.
 local currentTheme = WorldConfig.Worlds[1].theme
+local currentWorldId = WorldConfig.Worlds[1].id
 do
 	for _, world in WorldConfig.Worlds do
 		if world.placeId ~= 0 and world.placeId == game.PlaceId then
 			currentTheme = world.theme
+			currentWorldId = world.id
 			break
 		end
 	end
 end
+
+local IslandBuilder = require(script.Parent.Parent.World.IslandBuilder)
 
 -- The whole plaza floats high above the baseplate. Falling off anywhere on the map
 -- (plaza or obby) means a long drop - Workspace.FallenPartsDestroyHeight (set in
@@ -656,6 +662,25 @@ end
 
 function WorldBuilderService.build()
 	clearExisting()
+
+	-- World 1 is the hand-designed harbor island. Higher worlds still use the themed
+	-- sky plaza below until each gets its own build (they're separate places anyway).
+	if currentWorldId == WorldConfig.Worlds[1].id then
+		-- The template baseplate would poke out of the sea around the island's corners.
+		local baseplate = Workspace:FindFirstChild("Baseplate")
+		if baseplate then
+			baseplate:Destroy()
+		end
+		local root = Instance.new("Folder")
+		root.Name = "GeneratedWorld"
+		root.Parent = Workspace
+		IslandBuilder.build(root)
+		WorldBuilderService.WorldY = IslandBuilder.GroundY
+		WorldBuilderService.KillY = IslandBuilder.KillY
+		Workspace.FallenPartsDestroyHeight = IslandBuilder.KillY
+		return
+	end
+
 	setupAtmosphere()
 
 	local root = Instance.new("Folder")

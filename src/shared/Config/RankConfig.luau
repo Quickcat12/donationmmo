@@ -109,18 +109,38 @@ function RankConfig.getNextRank(currentRank: RankInfo): RankInfo?
 	return RankConfig.Ranks[currentRank.order + 1]
 end
 
+-- Past the top rank's threshold, levels keep climbing at a fixed XP step instead of
+-- freezing at the top rank's base level. Without this, any world gated above the top
+-- rank's base level (celestial_apex at 175) is unreachable forever, and the "nobody
+-- maxes out" promise breaks. When new ranks are added above Celestial, their thresholds
+-- simply take over from this step for the levels they cover.
+RankConfig.PostCapXpPerLevel = 8_000
+
 -- Returns 0-1 progress of a player's XP through their current rank towards the next.
+-- At the top rank there's no next rank, so this reports progress through the current
+-- post-cap level instead, which keeps the HUD bar moving rather than pinned at full.
 function RankConfig.getRankProgress(xp: number): number
 	local current = RankConfig.getRankForXp(xp)
 	local nextRank = RankConfig.getNextRank(current)
 	if not nextRank then
-		return 1
+		local over = math.max(0, xp - current.xpToReach)
+		return (over % RankConfig.PostCapXpPerLevel) / RankConfig.PostCapXpPerLevel
 	end
 	local span = nextRank.xpToReach - current.xpToReach
 	if span <= 0 then
 		return 1
 	end
 	return math.clamp((xp - current.xpToReach) / span, 0, 1)
+end
+
+-- XP still needed to reach the next rank, or nil at the top rank. The HUD shows this as
+-- "1,240 XP to Green", which keeps the next color in front of the player at all times.
+function RankConfig.getXpToNextRank(xp: number): number?
+	local nextRank = RankConfig.getNextRank(RankConfig.getRankForXp(xp))
+	if not nextRank then
+		return nil
+	end
+	return math.max(0, nextRank.xpToReach - xp)
 end
 
 -- Absolute level number (1-based, across all ranks) for a given XP total.
@@ -130,7 +150,8 @@ function RankConfig.getLevelForXp(xp: number): number
 	local baseLevel = (current.order - 1) * RankConfig.LevelsPerRank + 1
 
 	if not nextRank then
-		return baseLevel
+		local over = math.max(0, xp - current.xpToReach)
+		return baseLevel + math.floor(over / RankConfig.PostCapXpPerLevel)
 	end
 
 	local span = nextRank.xpToReach - current.xpToReach

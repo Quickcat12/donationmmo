@@ -23,6 +23,8 @@ type QuestSnapshotEntry = {
 	xpReward: number,
 	progress: number,
 	completed: boolean,
+	kind: string?, -- "daily" (claim button) or "journal" (auto-paid, one-time)
+	titleReward: string?,
 }
 
 type QuestCardRefs = {
@@ -125,7 +127,20 @@ local function updateQuestCard(refs: QuestCardRefs, quest: QuestSnapshotEntry)
 	refs.descriptionLabel.Text = quest.description
 	refs.fillBar.Size = UDim2.new(progressFraction, 0, 1, 0)
 	refs.fillBar.BackgroundColor3 = quest.completed and Theme.Success or Theme.Accent
-	refs.progressLabel.Text = `{quest.progress}/{quest.goalCount}  •  +{quest.xpReward} XP`
+	local reward = `+{quest.xpReward} XP`
+	if quest.titleReward then
+		reward ..= ` + "{quest.titleReward}" title`
+	end
+	refs.progressLabel.Text = `{quest.progress}/{quest.goalCount}  •  {reward}`
+
+	if quest.kind == "journal" then
+		-- Journal entries pay out automatically; the button is just a status chip.
+		refs.claimButton.Text = quest.completed and "Done" or "Auto"
+		refs.claimButton.BackgroundColor3 = quest.completed and Theme.Success or Theme.Background
+		refs.claimButton.TextColor3 = quest.completed and Theme.Background or Theme.TextSecondary
+		refs.claimButton.Active = false
+		return
+	end
 
 	refs.claimButton.Text = quest.completed and "Done" or "Claim"
 	refs.claimButton.BackgroundColor3 = quest.completed and Theme.Background
@@ -135,11 +150,35 @@ local function updateQuestCard(refs: QuestCardRefs, quest: QuestSnapshotEntry)
 	refs.claimButton.Active = canClaim
 end
 
+local sectionHeaders: { [string]: TextLabel } = {}
+
+local function ensureSectionHeader(kind: string, layoutOrder: number)
+	if sectionHeaders[kind] then
+		return
+	end
+	sectionHeaders[kind] = UICreate("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 24),
+		BackgroundTransparency = 1,
+		LayoutOrder = layoutOrder,
+		Text = kind == "journal" and "ISLAND JOURNAL  ·  one-time, paid instantly" or "DAILY  ·  resets every day",
+		Font = Theme.Font,
+		TextSize = 12,
+		TextColor3 = kind == "journal" and Color3.fromRGB(120, 220, 255) or Theme.Accent,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = scroll,
+	}) :: TextLabel
+end
+
 local function renderQuests(quests: { QuestSnapshotEntry })
 	for index, quest in quests do
+		local kind = quest.kind or "daily"
+		-- Dailies sort first (orders 1..), the journal after a gap; headers sit at the
+		-- start of each block.
+		local order = (kind == "journal" and 1000 or 0) + index * 2
+		ensureSectionHeader(kind, kind == "journal" and 1000 or 0)
 		local refs = questCards[quest.id]
 		if not refs then
-			refs = buildQuestCard(quest.id, index)
+			refs = buildQuestCard(quest.id, order)
 			questCards[quest.id] = refs
 		end
 		updateQuestCard(refs, quest)
@@ -161,7 +200,7 @@ local function buildPanel(hud: ScreenGui)
 			Size = UDim2.new(1, -20, 0, 34),
 			Position = UDim2.fromOffset(10, 8),
 			BackgroundTransparency = 1,
-			Text = "Daily Quests",
+			Text = "Quests",
 			Font = Theme.Font,
 			TextSize = 20,
 			TextColor3 = Theme.TextPrimary,

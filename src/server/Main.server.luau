@@ -27,6 +27,9 @@ local ObbyService = require(Services.ObbyService)
 local LeaderboardService = require(Services.LeaderboardService)
 local CosmeticService = require(Services.CosmeticService)
 local WorldPopulationService = require(Services.WorldPopulationService)
+local DailyRewardService = require(Services.DailyRewardService)
+local DiscoveryService = require(Services.DiscoveryService)
+local PlaytimeService = require(Services.PlaytimeService)
 local PlayerDataService = require(Services.PlayerDataService)
 
 -- Must run before StandService.start(), which scans for already-placed stands.
@@ -47,6 +50,9 @@ ObbyService.start()
 LeaderboardService.start()
 CosmeticService.start()
 WorldPopulationService.start()
+DailyRewardService.start()
+DiscoveryService.start()
+PlaytimeService.start()
 
 -- Must start last: fires DataLoaded for every current/joining player, and every other
 -- service above needs to already be listening for that signal.

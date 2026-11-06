@@ -29,7 +29,9 @@ function ServerBoostService.getMultiplier(): number
 end
 
 local function activateBoost(buyerName: string)
-	boostEndsAt = os.time() + ServerBoostConfig.DurationSeconds
+	-- A second blessing while one is running extends it rather than restarting the
+	-- clock, so the buyer never pays for minutes that overlap someone else's boost.
+	boostEndsAt = math.max(os.time(), boostEndsAt) + ServerBoostConfig.DurationSeconds
 	Net.get(RemoteNames.Events.ServerBoostActivated):FireAllClients({
 		buyerName = buyerName,
 		multiplier = ServerBoostConfig.Multiplier,

@@ -12,6 +12,8 @@ local Players = game:GetService("Players")
 
 local XPService = require(script.Parent.XPService)
 local QuestService = require(script.Parent.QuestService)
+local CheckpointService = require(script.Parent.CheckpointService)
+local PlayerDataService = require(script.Parent.PlayerDataService)
 
 local FINISH_TAG = "ObbyFinish"
 local DEFAULT_XP_REWARD = 300
@@ -48,6 +50,14 @@ local function onFinishTouched(finishPart: BasePart, hit: BasePart)
 	local xpReward = (finishPart:GetAttribute("XpReward") :: number?) or DEFAULT_XP_REWARD
 	XPService.grantXp(player, xpReward, `obby_{courseId}`)
 	QuestService.reportProgress(player, "obby_finish")
+	CheckpointService.clear(player)
+
+	-- First-ever clear of a course feeds the journal's "finish every islet obby".
+	local profile = PlayerDataService.get(player)
+	if profile and not profile.obbiesCompleted[courseId] then
+		profile.obbiesCompleted[courseId] = true
+		QuestService.reportProgress(player, "obby_unique")
+	end
 end
 
 local function hookFinishPart(instance: Instance)

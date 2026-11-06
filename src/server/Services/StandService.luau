@@ -106,13 +106,23 @@ local function updateRaisedLabel(stand: Model, totalReceived: number?)
 	end
 end
 
+-- Lowest StandIndex wins. World builders number booths from the entrance outward, so
+-- the first players fill the booths new arrivals see first; GetTagged order alone is
+-- arbitrary and would scatter a half-empty server around the ring.
 local function getUnclaimedStand(): Model?
+	local best: Model? = nil
+	local bestIndex = math.huge
 	for _, instance in CollectionService:GetTagged(STAND_TAG) do
 		if instance:IsA("Model") and (instance:GetAttribute("OwnerUserId") or 0) == 0 then
-			return instance
+			local index = instance:GetAttribute("StandIndex")
+			local order = if type(index) == "number" then index else 1e6
+			if order < bestIndex then
+				best = instance
+				bestIndex = order
+			end
 		end
 	end
-	return nil
+	return best
 end
 
 local function assignStand(player: Player)
@@ -145,6 +155,10 @@ local function releaseStand(player: Player)
 		updateRaisedLabel(stand, nil)
 		standByOwner[player] = nil
 	end
+end
+
+function StandService.getStand(player: Player): Model?
+	return standByOwner[player]
 end
 
 -- Called by DonationService after a successful donation so the sign's "X R$ raised"

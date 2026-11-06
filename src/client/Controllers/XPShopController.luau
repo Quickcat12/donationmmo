@@ -154,6 +154,9 @@ local function buildPanel(hud: ScreenGui): Frame
 		end
 
 		button.MouseButton1Click:Connect(function()
+			if item.productId == 0 then
+				return -- product not created on Roblox yet (see scripts/monetization)
+			end
 			buyEvent:FireServer(item.productId)
 		end)
 	end
