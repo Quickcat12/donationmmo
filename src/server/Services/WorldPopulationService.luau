@@ -30,15 +30,7 @@ local store = DataStoreService:GetDataStore("WorldPopulation_v1")
 -- Resolves which world this server instance represents, the same pattern XPService
 -- uses for currentWorldMultiplier - falls back to the first/base world when no real
 -- Place ID matches yet (local testing, or before WorldConfig is filled in).
-local currentWorldId = WorldConfig.Worlds[1].id
-do
-	for _, world in WorldConfig.Worlds do
-		if world.placeId ~= 0 and world.placeId == game.PlaceId then
-			currentWorldId = world.id
-			break
-		end
-	end
-end
+local currentWorldId = WorldConfig.getCurrentWorld().id
 
 local function publishOwnCount()
 	pcall(function()

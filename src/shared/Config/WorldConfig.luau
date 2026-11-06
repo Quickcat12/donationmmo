@@ -27,9 +27,10 @@ export type WorldInfo = {
 
 local WorldConfig = {}
 
--- IMPORTANT: placeId = 0 is a placeholder. Create each world as a separate Place inside
--- this experience (Studio > Game Settings > Places > Create Place), then paste the real
--- Place ID here before enabling cross-world teleports.
+-- Each world is its own Place in the experience (created 2026-11-06 via Studio's Asset
+-- Manager > Places In Experience > Add New Place). Every place runs this same codebase;
+-- WorldConfig.getCurrentWorld() picks the world by PlaceId. A new world needs a new
+-- place, its id here, and a WorldStyles entry.
 WorldConfig.Worlds = {
 	{
 		id = "gray_plaza",
@@ -37,7 +38,7 @@ WorldConfig.Worlds = {
 		displayName = "Gray Plaza",
 		requiredRank = "Gray",
 		requiredLevel = 1,
-		placeId = 0,
+		placeId = 83308240806095, -- the experience's start place
 		xpMultiplier = 1.0,
 		description = "Simple architecture, starter stands, beginner activities.",
 		theme = {
@@ -56,7 +57,7 @@ WorldConfig.Worlds = {
 		displayName = "Gray Outskirts",
 		requiredRank = "Gray",
 		requiredLevel = 13,
-		placeId = 0,
+		placeId = 127600683506432,
 		xpMultiplier = 1.05,
 		description = "The edge of the starting zone, tougher obbies and better starter rewards.",
 		theme = {
@@ -75,7 +76,7 @@ WorldConfig.Worlds = {
 		displayName = "Green District",
 		requiredRank = "Green",
 		requiredLevel = 26,
-		placeId = 0,
+		placeId = 91270071713450,
 		xpMultiplier = 1.1,
 		description = "Improved visuals, larger gathering spaces, upgraded rewards.",
 		theme = {
@@ -94,7 +95,7 @@ WorldConfig.Worlds = {
 		displayName = "Green Harbor",
 		requiredRank = "Green",
 		requiredLevel = 38,
-		placeId = 0,
+		placeId = 94627171493875,
 		xpMultiplier = 1.15,
 		description = "A bustling harbor district with expanded donation stands.",
 		theme = {
@@ -113,7 +114,7 @@ WorldConfig.Worlds = {
 		displayName = "Blue Heights",
 		requiredRank = "Blue",
 		requiredLevel = 51,
-		placeId = 0,
+		placeId = 136878559442716,
 		xpMultiplier = 1.3,
 		description = "More advanced stand customization, improved XP opportunities, premium aesthetics.",
 		theme = {
@@ -132,7 +133,7 @@ WorldConfig.Worlds = {
 		displayName = "Purple Gardens",
 		requiredRank = "Purple",
 		requiredLevel = 76,
-		placeId = 0,
+		placeId = 71402175303228,
 		xpMultiplier = 1.5,
 		description = "Beautiful architecture, enhanced social spaces, exclusive cosmetics.",
 		theme = {
@@ -151,7 +152,7 @@ WorldConfig.Worlds = {
 		displayName = "Gold Quarter",
 		requiredRank = "Gold",
 		requiredLevel = 101,
-		placeId = 0,
+		placeId = 126730434172139,
 		xpMultiplier = 1.75,
 		description = "Luxury buildings, marble pathways, animated environments, elite status.",
 		theme = {
@@ -170,7 +171,7 @@ WorldConfig.Worlds = {
 		displayName = "Diamond Realm",
 		requiredRank = "Diamond",
 		requiredLevel = 126,
-		placeId = 0,
+		placeId = 73813717341144,
 		xpMultiplier = 2.0,
 		description = "Massive plazas, advanced visual effects, highly prestigious players.",
 		theme = {
@@ -189,7 +190,7 @@ WorldConfig.Worlds = {
 		displayName = "Celestial Summit",
 		requiredRank = "Celestial",
 		requiredLevel = 151,
-		placeId = 0,
+		placeId = 88669404602429,
 		xpMultiplier = 2.4,
 		description = "The pinnacle of progression, featuring the most exclusive content available.",
 		theme = {
@@ -208,7 +209,7 @@ WorldConfig.Worlds = {
 		displayName = "Celestial Apex",
 		requiredRank = "Celestial",
 		requiredLevel = 175,
-		placeId = 0,
+		placeId = 116000809597390,
 		xpMultiplier = 2.75,
 		description = "Endgame prestige world for top-ranked players. Always expanding.",
 		theme = {
@@ -222,6 +223,29 @@ WorldConfig.Worlds = {
 		},
 	},
 } :: { WorldInfo }
+
+-- Which world this server is. Matched by PlaceId; the start place (and any place not
+-- listed yet) is World 1. In Studio only, setting the Workspace attribute
+-- "PreviewWorld" to a world id previews that world's build and multipliers without
+-- publishing a separate place.
+function WorldConfig.getCurrentWorld(): WorldInfo
+	if game:GetService("RunService"):IsStudio() then
+		local preview = workspace:GetAttribute("PreviewWorld")
+		if type(preview) == "string" then
+			for _, world in WorldConfig.Worlds do
+				if world.id == preview then
+					return world
+				end
+			end
+		end
+	end
+	for _, world in WorldConfig.Worlds do
+		if world.placeId ~= 0 and world.placeId == game.PlaceId then
+			return world
+		end
+	end
+	return WorldConfig.Worlds[1]
+end
 
 function WorldConfig.getWorldById(id: string): WorldInfo?
 	for _, world in WorldConfig.Worlds do

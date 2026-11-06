@@ -32,7 +32,14 @@ local GROUND_Y = 5
 local SEA_FLOOR_Y = -30
 local STAND_COUNT = 30
 local BOOTH_RADIUS = 108
-local PLAZA_RADIUS = 60
+local WorldStyles = require(script.Parent.WorldStyles)
+type Style = WorldStyles.Style
+
+-- The world being built. Set at the top of IslandBuilder.build(); every helper below
+-- reads its palette/materials from here, so one layout serves all ten worlds.
+local S: Style = WorldStyles.get("gray_plaza")
+local PLAZA_RADIUS = S.plazaRadius
+local worldPrefix = "" -- discovery ids are namespaced per world (World 1 keeps plain ids)
 
 IslandBuilder.GroundY = GROUND_Y
 IslandBuilder.StandCount = STAND_COUNT
@@ -49,22 +56,8 @@ local TAGS = {
 	discovery = "Discovery",
 }
 
--- Palette for the Gray class: warm weathered wood, cool stone, off-white canvas.
-local COLORS = {
-	stone = Color3.fromRGB(150, 148, 142),
-	stoneDark = Color3.fromRGB(108, 106, 102),
-	stoneLight = Color3.fromRGB(190, 187, 180),
-	wood = Color3.fromRGB(122, 92, 64),
-	woodDark = Color3.fromRGB(86, 64, 46),
-	canvas = Color3.fromRGB(226, 222, 212),
-	canvasStripe = Color3.fromRGB(128, 132, 140),
-	iron = Color3.fromRGB(52, 52, 56),
-	lampGlow = Color3.fromRGB(255, 196, 120),
-	water = Color3.fromRGB(70, 150, 170),
-	rock = Color3.fromRGB(112, 108, 100),
-	leaf = Color3.fromRGB(76, 118, 58),
-	trunk = Color3.fromRGB(116, 90, 62),
-}
+-- Current world's palette (see WorldStyles); reassigned in build().
+local COLORS: { [string]: Color3 } = S.palette
 
 ------------------------------------------------------------------------------------
 -- Small helpers
@@ -120,6 +113,16 @@ local function tryAsset(name: string, pivot: CFrame, parent: Instance, scale: nu
 	for _, descendant in clone:GetDescendants() do
 		if descendant:IsA("BasePart") then
 			descendant.Anchored = true
+			-- Re-skin the shared Blender props in this world's materials (marble, gold,
+			-- glass...) by role name, so one mesh set serves every social class.
+			local look = S.roleLooks[descendant.Name]
+			if look then
+				descendant.Material = look.material
+				descendant.Color = look.color
+				if look.transparency then
+					descendant.Transparency = look.transparency
+				end
+			end
 		end
 	end
 	clone.Parent = parent
@@ -136,7 +139,7 @@ local function addDiscovery(parent: Instance, id: string, displayName: string, p
 		CanQuery = false,
 		Parent = parent,
 	})
-	trigger:SetAttribute("DiscoveryId", id)
+	trigger:SetAttribute("DiscoveryId", worldPrefix .. id)
 	trigger:SetAttribute("DisplayName", displayName)
 	trigger:SetAttribute("XpReward", xp)
 	CollectionService:AddTag(trigger, TAGS.discovery)
@@ -261,7 +264,7 @@ local function materialFor(x: number, z: number, h: number): Enum.Material
 		return Enum.Material.Pavement
 	end
 	if pathMask(x, z) and h < GROUND_Y + 1.5 then
-		return Enum.Material.Cobblestone
+		return S.pathMaterial
 	end
 	if slope > 0.5 or h > GROUND_Y + 30 then
 		return if math.noise(x / 12, z / 12, 4.4) > 0 then Enum.Material.Rock else Enum.Material.Grass
@@ -279,8 +282,17 @@ local TERRAIN_MIN_Y = -48
 local TERRAIN_MAX_Y = 80
 local CHUNK = 64 -- voxels per chunk side
 
+-- Floating worlds: land only, with a rocky underside that tapers to a point toward
+-- the coast, so the island hangs in the sky instead of sitting in the sea.
+local function undersideY(x: number, z: number, h: number): number
+	-- At least 12 studs thick everywhere: thinner rims voxelize into see-through holes.
+	local depth = 12 + 76 * smoothstep(0, 6, h) * (0.65 + 0.35 * math.noise(x / 60, z / 60, 3.3))
+	return h - depth
+end
+
 local function writeChunk(terrain: Terrain, cx0: number, cz0: number)
-	local ny = (TERRAIN_MAX_Y - TERRAIN_MIN_Y) // VOXEL
+	local minY = if S.floating then TERRAIN_MIN_Y - 48 else TERRAIN_MIN_Y
+	local ny = (TERRAIN_MAX_Y - minY) // VOXEL
 	local materials = table.create(CHUNK)
 	local occupancies = table.create(CHUNK)
 	for ix = 1, CHUNK do
@@ -295,13 +307,17 @@ local function writeChunk(terrain: Terrain, cx0: number, cz0: number)
 			local z = cz0 + (iz - 0.5) * VOXEL
 			local h = surfaceHeight(x, z)
 			local surfaceMat = materialFor(x, z, h)
+			local bottom = if S.floating and h > 0.5 then undersideY(x, z, h) else -math.huge
 			for iy = 1, ny do
-				local y0 = TERRAIN_MIN_Y + (iy - 1) * VOXEL
+				local y0 = minY + (iy - 1) * VOXEL
 				local occupancy = math.clamp((h - y0) / VOXEL, 0, 1)
+				if S.floating then
+					occupancy = if h > 0.5 then occupancy * math.clamp((y0 + VOXEL - bottom) / VOXEL, 0, 1) else 0
+				end
 				if occupancy > 0 then
 					matX[iy][iz] = if h - y0 > 10 then Enum.Material.Rock else surfaceMat
 					occX[iy][iz] = occupancy
-				elseif y0 < 0 then
+				elseif y0 < 0 and not S.floating then
 					matX[iy][iz] = Enum.Material.Water
 					occX[iy][iz] = 1
 				else
@@ -314,7 +330,7 @@ local function writeChunk(terrain: Terrain, cx0: number, cz0: number)
 		occupancies[ix] = occX
 	end
 	local region = Region3.new(
-		Vector3.new(cx0, TERRAIN_MIN_Y, cz0),
+		Vector3.new(cx0, minY, cz0),
 		Vector3.new(cx0 + CHUNK * VOXEL, TERRAIN_MAX_Y, cz0 + CHUNK * VOXEL)
 	)
 	terrain:WriteVoxels(region, VOXEL, materials, occupancies)
@@ -326,8 +342,10 @@ local function buildTerrain()
 
 	-- Open ocean well past the island region, so the horizon is water in every
 	-- direction (atmosphere haze hides the far edge).
-	terrain:FillBlock(CFrame.new(0, -40, 0), Vector3.new(4096, 16, 4096), Enum.Material.Sand)
-	terrain:FillBlock(CFrame.new(0, -16, 0), Vector3.new(4096, 32, 4096), Enum.Material.Water)
+	if not S.floating then
+		terrain:FillBlock(CFrame.new(0, -40, 0), Vector3.new(4096, 16, 4096), Enum.Material.Sand)
+		terrain:FillBlock(CFrame.new(0, -16, 0), Vector3.new(4096, 32, 4096), Enum.Material.Water)
+	end
 
 	local chunkStuds = CHUNK * VOXEL
 	for cx = -TERRAIN_HALF, TERRAIN_HALF - chunkStuds, chunkStuds do
@@ -336,24 +354,21 @@ local function buildTerrain()
 		end
 	end
 
-	terrain.WaterColor = Color3.fromRGB(38, 118, 128)
-	terrain.WaterTransparency = 0.45
-	terrain.WaterReflectance = 0.6
+	terrain.WaterColor = S.water.color
+	terrain.WaterTransparency = S.water.transparency
+	terrain.WaterReflectance = S.water.reflectance
 	terrain.WaterWaveSize = 0.18
 	terrain.WaterWaveSpeed = 8
 	pcall(function()
-		terrain:SetMaterialColor(Enum.Material.Grass, Color3.fromRGB(104, 132, 70))
-		terrain:SetMaterialColor(Enum.Material.LeafyGrass, Color3.fromRGB(92, 120, 62))
-		terrain:SetMaterialColor(Enum.Material.Sand, Color3.fromRGB(212, 196, 156))
-		terrain:SetMaterialColor(Enum.Material.Cobblestone, Color3.fromRGB(150, 146, 138))
-		terrain:SetMaterialColor(Enum.Material.Rock, Color3.fromRGB(118, 114, 106))
-		terrain:SetMaterialColor(Enum.Material.Ground, Color3.fromRGB(120, 106, 82))
+		for material, color in S.terrainColors do
+			terrain:SetMaterialColor(material, color)
+		end
 	end)
 
 	local clouds = terrain:FindFirstChildOfClass("Clouds") or Instance.new("Clouds")
-	clouds.Cover = 0.55
+	clouds.Cover = S.cloudCover
 	clouds.Density = 0.55
-	clouds.Color = Color3.fromRGB(240, 240, 245)
+	clouds.Color = S.cloudColor
 	clouds.Parent = terrain
 end
 
@@ -369,40 +384,46 @@ local function setupLighting()
 		end
 	end
 
-	Lighting.ClockTime = 15.2
+	Lighting.ClockTime = S.clockTime
 	Lighting.GeographicLatitude = 35
-	Lighting.Brightness = 2.6
-	Lighting.Ambient = Color3.fromRGB(88, 90, 100)
-	Lighting.OutdoorAmbient = Color3.fromRGB(128, 130, 140)
+	Lighting.Brightness = S.brightness
+	Lighting.Ambient = S.ambient
+	Lighting.OutdoorAmbient = S.outdoorAmbient
 	Lighting.EnvironmentDiffuseScale = 0.8
 	Lighting.EnvironmentSpecularScale = 0.8
 	Lighting.ShadowSoftness = 0.25
 	Lighting.FogEnd = 100000
 
 	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Density = 0.27
-	atmosphere.Offset = 0.15
-	atmosphere.Color = Color3.fromRGB(200, 214, 228)
-	atmosphere.Decay = Color3.fromRGB(110, 128, 150)
-	atmosphere.Glare = 0.25
-	atmosphere.Haze = 1.4
+	atmosphere.Density = S.atmosphere.density
+	atmosphere.Offset = S.atmosphere.offset
+	atmosphere.Color = S.atmosphere.color
+	atmosphere.Decay = S.atmosphere.decay
+	atmosphere.Glare = S.atmosphere.glare
+	atmosphere.Haze = S.atmosphere.haze
 	atmosphere.Parent = Lighting
 
+	-- Night worlds (Diamond, Celestial) lean on a dense starfield instead of the sun.
+	local sky = Instance.new("Sky")
+	sky.StarCount = S.starCount
+	sky.CelestialBodiesShown = true
+	sky.Parent = Lighting
+
 	local bloom = Instance.new("BloomEffect")
-	bloom.Intensity = 0.5
-	bloom.Size = 26
-	bloom.Threshold = 1.6
+	bloom.Intensity = S.bloom.intensity
+	bloom.Size = S.bloom.size
+	bloom.Threshold = S.bloom.threshold
 	bloom.Parent = Lighting
 
 	local sunRays = Instance.new("SunRaysEffect")
-	sunRays.Intensity = 0.05
+	sunRays.Intensity = S.sunRays
 	sunRays.Spread = 0.6
 	sunRays.Parent = Lighting
 
 	local grade = Instance.new("ColorCorrectionEffect")
-	grade.Saturation = 0.06
-	grade.Contrast = 0.06
-	grade.TintColor = Color3.fromRGB(255, 251, 244)
+	grade.Saturation = S.grade.saturation
+	grade.Contrast = S.grade.contrast
+	grade.TintColor = S.grade.tint
 	grade.Parent = Lighting
 end
 
@@ -530,6 +551,261 @@ local function buildBench(parent: Instance, cf: CFrame)
 	end
 end
 
+
+-- Backdrop dressing behind the booth ring, chosen by the world's class.
+local function buildColumn(parent: Instance, position: Vector3, height: number)
+	uprightCylinder({ Name = "ColumnBase", Material = Enum.Material.Marble, Color = COLORS.stoneLight, Parent = parent },
+		position + Vector3.new(0, 0.6, 0), 1.2, 4.2)
+	uprightCylinder({ Name = "Column", Material = Enum.Material.Marble, Color = COLORS.stoneLight, Parent = parent },
+		position + Vector3.new(0, 1.2 + height / 2, 0), height, 2.8)
+	uprightCylinder({ Name = "Capital", Material = S.trimMaterial, Color = COLORS.stoneDark, Parent = parent },
+		position + Vector3.new(0, 1.2 + height + 0.5, 0), 1, 4)
+end
+
+local function buildCrystal(parent: Instance, position: Vector3, height: number, seed: number)
+	for k = 1, 3 do
+		local h = height * (1 - (k - 1) * 0.28)
+		local tilt = CFrame.Angles(math.rad(8 * k * (seed % 2 == 0 and 1 or -1)), seed * 1.3 + k * 2.1, math.rad(6 * k))
+		local crystal = part({
+			Name = "Crystal",
+			Size = Vector3.new(h * 0.22, h, h * 0.22),
+			CFrame = CFrame.new(position) * tilt * CFrame.new(0, h / 2 - 0.5, 0) * CFrame.Angles(0, math.rad(45), 0),
+			Material = Enum.Material.Glass,
+			Color = COLORS.accent,
+			Transparency = 0.25,
+			Reflectance = 0.3,
+			Parent = parent,
+		})
+		crystal.CastShadow = false
+		if k == 1 then
+			local light = Instance.new("PointLight")
+			light.Color = COLORS.accent
+			light.Range = 16
+			light.Brightness = 1.5
+			light.Parent = crystal
+		end
+	end
+end
+
+local function buildOrb(parent: Instance, position: Vector3, seed: number)
+	uprightCylinder({ Name = "OrbPedestal", Material = Enum.Material.Marble, Color = COLORS.stoneLight, Parent = parent },
+		position + Vector3.new(0, 3, 0), 6, 1.2)
+	local orb = part({
+		Name = "Orb",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.new(3, 3, 3),
+		CFrame = CFrame.new(position + Vector3.new(0, 8.5, 0)),
+		Material = Enum.Material.Neon,
+		Color = COLORS.accent,
+		CanCollide = false,
+		Parent = parent,
+	})
+	orb.CastShadow = false
+	local light = Instance.new("PointLight")
+	light.Color = COLORS.accent
+	light.Range = 18
+	light.Brightness = 2
+	light.Parent = orb
+	TweenService:Create(orb, TweenInfo.new(2.4 + (seed % 5) * 0.3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+		CFrame = orb.CFrame + Vector3.new(0, 1.6, 0),
+	}):Play()
+end
+
+local function buildDecor(parent: Instance, position: Vector3, seed: number)
+	if S.decor == "columns" then
+		buildColumn(parent, position, 14)
+	elseif S.decor == "crystals" then
+		buildCrystal(parent, position, 12 + (seed % 4) * 3, seed)
+	elseif S.decor == "orbs" then
+		buildOrb(parent, position, seed)
+	else
+		buildPalm(parent, position, seed)
+	end
+end
+
+------------------------------------------------------------------------------------
+-- World set pieces: what each class adds on top of the shared layout.
+------------------------------------------------------------------------------------
+
+local function ringSegments(radius: number, count: number, gapAngles: { number }, gapWidth: number, fn: (angle: number) -> ())
+	for i = 0, count - 1 do
+		local angle = (i + 0.5) / count * math.pi * 2
+		local skip = false
+		for _, gap in gapAngles do
+			local diff = math.abs(math.atan2(math.sin(angle - gap), math.cos(angle - gap)))
+			if diff < gapWidth then
+				skip = true
+			end
+		end
+		if not skip then
+			fn(angle)
+		end
+	end
+end
+
+-- The plaza's four walkways (south arrival, north portal, east/west paths).
+local ENTRANCES = { math.rad(90), math.rad(270), 0, math.pi }
+
+local function buildFeatures(root: Instance)
+	local folder = Instance.new("Folder")
+	folder.Name = "WorldFeatures"
+	folder.Parent = root
+	local f = S.features
+	local edge = PLAZA_RADIUS + 5
+
+	if f.hedges then
+		-- Low clipped hedges framing the plaza, broken at each walkway.
+		ringSegments(edge, 40, ENTRANCES, math.rad(9), function(angle)
+			local pos = Vector3.new(math.cos(angle) * edge, GROUND_Y + 1.4, math.sin(angle) * edge)
+			part({
+				Name = "Hedge",
+				Size = Vector3.new(2.4, 2.8, edge * 2 * math.pi / 40 + 0.4),
+				CFrame = CFrame.lookAt(pos, Vector3.new(0, pos.Y, 0)) * CFrame.Angles(0, math.rad(90), 0),
+				Material = Enum.Material.LeafyGrass,
+				Color = COLORS.leaf,
+				Parent = folder,
+			})
+		end)
+	end
+
+	if f.flowers then
+		local blooms = { COLORS.accent, Color3.fromRGB(255, 240, 200), Color3.fromRGB(255, 170, 190), COLORS.canvasStripe }
+		ringSegments(edge + 2.4, 70, ENTRANCES, math.rad(9), function(angle)
+			for k = 0, 1 do
+				local r = edge + 2.2 + k * 0.9
+				local flower = part({
+					Name = "Flower",
+					Shape = Enum.PartType.Ball,
+					Size = Vector3.new(1.1, 1.1, 1.1),
+					CFrame = CFrame.new(math.cos(angle + k * 0.03) * r, GROUND_Y + 2.9, math.sin(angle + k * 0.03) * r),
+					Material = Enum.Material.SmoothPlastic,
+					Color = blooms[(math.floor(angle * 10) + k) % #blooms + 1],
+					CanCollide = false,
+					Parent = folder,
+				})
+				flower.CastShadow = false
+			end
+		end)
+	end
+
+	if f.colonnade then
+		-- Marble columns around the plaza rim carrying a trimmed ring: the "luxury
+		-- architecture" signal that Gold and above get and nothing below does.
+		local count = 16
+		ringSegments(edge + 3, count, ENTRANCES, math.rad(6), function(angle)
+			buildColumn(folder, Vector3.new(math.cos(angle) * (edge + 3), GROUND_Y, math.sin(angle) * (edge + 3)), 16)
+		end)
+		ringSegments(edge + 3, 64, ENTRANCES, math.rad(6), function(angle)
+			local pos = Vector3.new(math.cos(angle) * (edge + 3), GROUND_Y + 19.2, math.sin(angle) * (edge + 3))
+			part({
+				Name = "Entablature",
+				Size = Vector3.new(4.4, 1.6, (edge + 3) * 2 * math.pi / 64 + 0.3),
+				CFrame = CFrame.lookAt(pos, Vector3.new(0, pos.Y, 0)) * CFrame.Angles(0, math.rad(90), 0),
+				Material = S.trimMaterial,
+				Color = COLORS.stoneDark,
+				Parent = folder,
+			})
+		end)
+	end
+
+	if f.accentStrips then
+		uprightCylinder({ Name = "AccentRing", Material = Enum.Material.Neon, Color = COLORS.accent, CanCollide = false, Parent = folder },
+			Vector3.new(0, GROUND_Y + 0.62, 0), 0.06, PLAZA_RADIUS * 2 + 1)
+		uprightCylinder({ Name = "AccentRingInner", Material = Enum.Material.Neon, Color = COLORS.accent, CanCollide = false, Parent = folder },
+			Vector3.new(0, GROUND_Y + 0.66, 0), 0.06, 45)
+	end
+
+	if f.crystals then
+		for i = 0, 5 do
+			local angle = (i + 0.5) / 6 * math.pi * 2
+			local x, z = math.cos(angle) * 168, math.sin(angle) * 168
+			buildCrystal(folder, Vector3.new(x, surfaceHeight(x, z) - 1, z), 34, i + 2)
+		end
+	end
+
+	if f.monument then
+		-- A halo of light hanging above the fountain, slowly turning: visible from the
+		-- whole island and unlike anything in the worlds below.
+		local halo = Instance.new("Model")
+		halo.Name = "Halo"
+		local segments = 36
+		for i = 0, segments - 1 do
+			local angle = i / segments * math.pi * 2
+			local seg = part({
+				Name = "HaloSegment",
+				Size = Vector3.new(1.2, 1.2, 2 * math.pi * 26 / segments + 0.4),
+				CFrame = CFrame.new(math.cos(angle) * 26, GROUND_Y + 46, math.sin(angle) * 26) * CFrame.Angles(0, -angle, 0),
+				Material = Enum.Material.Neon,
+				Color = COLORS.accent,
+				CanCollide = false,
+				Parent = halo,
+			})
+			seg.CastShadow = false
+		end
+		halo.Parent = folder
+		local pivot = halo:GetPivot()
+		task.spawn(function()
+			local t0 = os.clock()
+			while halo.Parent do
+				local t = os.clock() - t0
+				halo:PivotTo(pivot * CFrame.Angles(math.rad(8) * math.sin(t * 0.3), t * 0.15, 0))
+				task.wait(0.05)
+			end
+		end)
+		-- Obelisks on the four diagonals.
+		for i = 0, 3 do
+			local angle = math.rad(45 + 90 * i)
+			local x, z = math.cos(angle) * 150, math.sin(angle) * 150
+			local base = surfaceHeight(x, z)
+			part({ Name = "ObeliskBase", Size = Vector3.new(9, 3, 9), CFrame = CFrame.new(x, base + 1.5, z), Material = Enum.Material.Marble, Color = COLORS.stoneLight, Parent = folder })
+			part({ Name = "Obelisk", Size = Vector3.new(5, 40, 5), CFrame = CFrame.new(x, base + 23, z), Material = Enum.Material.Marble, Color = COLORS.stoneLight, Parent = folder })
+			local tip = part({ Name = "ObeliskTip", Shape = Enum.PartType.Ball, Size = Vector3.new(4, 4, 4), CFrame = CFrame.new(x, base + 45, z), Material = Enum.Material.Neon, Color = COLORS.accent, Parent = folder })
+			local light = Instance.new("PointLight")
+			light.Color = COLORS.accent
+			light.Range = 30
+			light.Brightness = 2
+			light.Parent = tip
+		end
+	end
+
+	if f.floatingRocks then
+		for i = 1, 12 do
+			local angle = i / 12 * math.pi * 2 + 0.2
+			local r = 320 + (i % 3) * 60
+			local pos = Vector3.new(math.cos(angle) * r, 10 + (i % 4) * 18, math.sin(angle) * r)
+			local rock = part({
+				Name = "SkyRock",
+				Size = Vector3.new(14 + i % 5 * 4, 8 + i % 3 * 3, 12 + i % 4 * 4),
+				CFrame = CFrame.new(pos) * CFrame.Angles(i * 0.4, i * 1.1, i * 0.2),
+				Material = Enum.Material.Slate,
+				Color = COLORS.rock,
+				Parent = folder,
+			})
+			TweenService:Create(rock, TweenInfo.new(5 + i % 4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+				CFrame = rock.CFrame + Vector3.new(0, 4, 0),
+			}):Play()
+		end
+	end
+
+	if f.extraRocks then
+		for i = 1, 18 do
+			local a = i / 18 * math.pi * 2 + 0.31
+			local r = coastRadius(math.cos(a), math.sin(a)) - 20 - (i % 3) * 8
+			local x, z = math.cos(a) * r, math.sin(a) * r
+			buildRock(folder, Vector3.new(x, surfaceHeight(x, z), z), 5 + (i % 4) * 2, i + 40)
+		end
+	end
+
+	if f.extraBoats then
+		for i = 1, 3 do
+			local cf = CFrame.new(-14 - i * 2, 0.6, 250 + i * 18) * CFrame.Angles(0, math.rad(-8 + i * 7), 0)
+			if not tryAsset("Rowboat", cf, folder) then
+				part({ Name = "Hull", Size = Vector3.new(5, 2, 14), CFrame = cf, Material = Enum.Material.WoodPlanks, Color = COLORS.wood, Parent = folder })
+			end
+		end
+	end
+end
+
 ------------------------------------------------------------------------------------
 -- Plaza and fountain
 ------------------------------------------------------------------------------------
@@ -579,13 +855,13 @@ local function buildPlaza(parent: Instance)
 	plaza.Parent = parent
 
 	-- Paved disc with a darker inlaid ring; slightly raised so it reads as built ground.
-	uprightCylinder({ Name = "Paving", Material = Enum.Material.Pavement, Color = COLORS.stoneLight, Parent = plaza },
+	uprightCylinder({ Name = "Paving", Material = S.paving, Color = S.pavingColor, Parent = plaza },
 		Vector3.new(0, GROUND_Y + 0.3, 0), 0.6, PLAZA_RADIUS * 2)
-	uprightCylinder({ Name = "Inlay", Material = Enum.Material.Slate, Color = COLORS.stoneDark, Parent = plaza },
+	uprightCylinder({ Name = "Inlay", Material = S.inlay, Color = S.inlayColor, Parent = plaza },
 		Vector3.new(0, GROUND_Y + 0.35, 0), 0.6, 44)
-	uprightCylinder({ Name = "InlayInner", Material = Enum.Material.Pavement, Color = COLORS.stoneLight, Parent = plaza },
+	uprightCylinder({ Name = "InlayInner", Material = S.paving, Color = S.pavingColor, Parent = plaza },
 		Vector3.new(0, GROUND_Y + 0.4, 0), 0.6, 40)
-	uprightCylinder({ Name = "Curb", Material = Enum.Material.Slate, Color = COLORS.stoneDark, Parent = plaza },
+	uprightCylinder({ Name = "Curb", Material = S.trimMaterial, Color = COLORS.stoneDark, Parent = plaza },
 		Vector3.new(0, GROUND_Y + 0.15, 0), 0.6, PLAZA_RADIUS * 2 + 3)
 
 	buildFountain(plaza)
@@ -804,7 +1080,7 @@ local function buildBooths(parent: Instance)
 		local deg = math.deg(angle)
 		local inGap = math.abs(deg - 90) < 22 or math.abs(deg - 270) < 16
 		if not inGap then
-			buildPalm(folder, Vector3.new(math.cos(angle) * 134, GROUND_Y - 0.5, math.sin(angle) * 134), i + 3)
+			buildDecor(folder, Vector3.new(math.cos(angle) * 134, GROUND_Y - 0.5, math.sin(angle) * 134), i + 3)
 		end
 	end
 end
@@ -864,7 +1140,7 @@ local function buildArrival(parent: Instance)
 		local text = Instance.new("TextLabel")
 		text.Size = UDim2.fromScale(1, 1)
 		text.BackgroundTransparency = 1
-		text.Text = "GRAY PLAZA  ·  WORLD 1"
+		text.Text = S.archText
 		text.Font = Enum.Font.GothamBlack
 		text.TextScaled = true
 		text.TextColor3 = Color3.fromRGB(236, 232, 222)
@@ -1117,7 +1393,7 @@ local function buildLighthouse(parent: Instance)
 			uprightCylinder({
 				Name = "Band",
 				Material = Enum.Material.Concrete,
-				Color = i % 2 == 0 and Color3.fromRGB(236, 232, 224) or Color3.fromRGB(150, 70, 62),
+				Color = i % 2 == 0 and COLORS.stoneLight or COLORS.canvasStripe,
 				Parent = folder,
 			}, Vector3.new(baseX, groundY + (i + 0.5) * towerHeight / bands, baseZ), towerHeight / bands + 0.05, diameter)
 		end
@@ -1435,7 +1711,12 @@ end
 
 ------------------------------------------------------------------------------------
 
-function IslandBuilder.build(root: Instance)
+function IslandBuilder.build(root: Instance, style: Style?, world: { id: string, order: number }?)
+	S = style or WorldStyles.get("gray_plaza")
+	COLORS = S.palette
+	PLAZA_RADIUS = S.plazaRadius
+	worldPrefix = if world and world.order > 1 then `{world.id}/` else ""
+
 	local found = ServerStorage:FindFirstChild("LobbyAssets")
 	assetFolder = if found and found:IsA("Folder") then found else nil
 
@@ -1450,6 +1731,7 @@ function IslandBuilder.build(root: Instance)
 	buildPortal(root)
 	buildShowcase(root)
 	buildLandmarks(root)
+	buildFeatures(root)
 
 	local obbies = Instance.new("Folder")
 	obbies.Name = "Obbies"
@@ -1459,7 +1741,8 @@ function IslandBuilder.build(root: Instance)
 	buildSkyRocks(obbies)
 
 	print(string.format(
-		"[IslandBuilder] World 1 built in %.2fs (terrain %.2fs), Blender assets: %s",
+		"[IslandBuilder] %s built in %.2fs (terrain %.2fs), Blender assets: %s",
+		S.id,
 		os.clock() - started,
 		terrainSeconds,
 		assetFolder and "yes" or "no (primitive fallbacks)"

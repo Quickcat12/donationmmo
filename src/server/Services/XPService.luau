@@ -26,15 +26,7 @@ XPService.RankChanged = Signal.new()
 -- The world multiplier for the place this server instance represents. Resolved once at
 -- startup by matching game.PlaceId against WorldConfig. Defaults to 1.0 during local
 -- testing / before real Place IDs are filled in (all placeholders are 0).
-local currentWorldMultiplier = 1.0
-do
-	for _, world in WorldConfig.Worlds do
-		if world.placeId ~= 0 and world.placeId == game.PlaceId then
-			currentWorldMultiplier = world.xpMultiplier
-			break
-		end
-	end
-end
+local currentWorldMultiplier = WorldConfig.getCurrentWorld().xpMultiplier
 
 -- The player list shows Rank, Donated and Raised, never the raw level: players identify
 -- by color ("I'm a Gold"), and lifetime Robux totals are the social proof that makes a
