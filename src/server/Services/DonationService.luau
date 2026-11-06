@@ -21,6 +21,7 @@ local RemoteNames = require(Shared.Net.RemoteNames)
 local PlayerDataService = require(script.Parent.PlayerDataService)
 local XPService = require(script.Parent.XPService)
 local QuestService = require(script.Parent.QuestService)
+local StandService = require(script.Parent.StandService)
 
 local DonationService = {}
 
@@ -180,6 +181,9 @@ local function onReportGamepassDonation(donor: Player, receiverUserId: unknown, 
 	receiverProfile.totalReceivedRobux += robuxPrice
 	receiverProfile.receivedCount += 1
 	receiverProfile.stand.totalReceived += robuxPrice
+
+	StandService.refreshRaisedDisplay(receiver)
+	StandService.playPurchaseEffect(receiver, robuxPrice)
 
 	XPService.grantXp(receiver, math.floor(donorXp * 0.35), "donation_received")
 	QuestService.reportProgress(receiver, "donate_received")

@@ -73,6 +73,11 @@ local function setupAtmosphere()
 	atmosphere.Haze = 1.2
 	atmosphere.Parent = Lighting
 
+	-- Defensive: a pure-black Ambient (easy to end up with while tuning Voxel-technology
+	-- lighting for mood) leaves anything not directly sunlit completely black, which is
+	-- especially bad combined with the Dome overhead attenuating the sun further.
+	Lighting.Ambient = Color3.fromRGB(89, 89, 102)
+	Lighting.OutdoorAmbient = Color3.fromRGB(89, 89, 102)
 	Lighting.Brightness = 3
 	Lighting.FogEnd = currentTheme.fogEnd
 end
@@ -174,7 +179,9 @@ local function buildDome(parent: Instance)
 	dome.CFrame = CFrame.new(0, WORLD_Y, 0)
 	dome.Material = Enum.Material.ForceField
 	dome.Color = Color3.fromRGB(120, 190, 255)
-	dome.Transparency = 0.55
+	-- Much more see-through than a first pass at this (0.55) - that was dark enough to
+	-- act like an opaque roof over the whole plaza and blocked most of the sunlight.
+	dome.Transparency = 0.9
 	dome.Parent = parent
 end
 
@@ -455,7 +462,7 @@ local function buildStand(index: number, parent: Instance)
 
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "Sign"
-	billboard.Size = UDim2.fromOffset(200, 74)
+	billboard.Size = UDim2.fromOffset(200, 100)
 	billboard.StudsOffset = Vector3.new(0, 1, 0)
 	billboard.AlwaysOnTop = true
 	billboard.Parent = signPost
@@ -482,6 +489,43 @@ local function buildStand(index: number, parent: Instance)
 	titleLabel.TextScaled = true
 	titleLabel.TextColor3 = RankConfig.Ranks[1].color
 	titleLabel.Parent = billboard
+
+	local raisedLabel = Instance.new("TextLabel")
+	raisedLabel.Name = "RaisedLabel"
+	raisedLabel.Size = UDim2.new(1, 0, 0, 22)
+	raisedLabel.Position = UDim2.new(0, 0, 0, 70)
+	raisedLabel.BackgroundTransparency = 0.6
+	raisedLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+	raisedLabel.Text = ""
+	raisedLabel.Font = Enum.Font.GothamBold
+	raisedLabel.TextScaled = true
+	raisedLabel.TextColor3 = Color3.fromRGB(255, 205, 70)
+	raisedLabel.Parent = billboard
+
+	-- Donation-scaled purchase burst, triggered by StandService.playPurchaseEffect().
+	local effectAttachment = Instance.new("Attachment")
+	effectAttachment.Name = "EffectAttachment"
+	effectAttachment.Position = Vector3.new(0, 1.6, 0)
+	effectAttachment.Parent = podium
+
+	local burst = Instance.new("ParticleEmitter")
+	burst.Name = "DonationBurst"
+	burst.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	burst.Color = ColorSequence.new(Color3.fromRGB(255, 221, 110))
+	burst.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.6),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	burst.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	burst.Lifetime = NumberRange.new(0.8, 1.4)
+	burst.Speed = NumberRange.new(8, 16)
+	burst.SpreadAngle = Vector2.new(45, 45)
+	burst.Rate = 0
+	burst.Enabled = false
+	burst.Parent = effectAttachment
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "DonatePrompt"

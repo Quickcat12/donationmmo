@@ -24,6 +24,8 @@ export type RemoteName =
 	| "BigDonationAnnouncement"
 	| "RequestBuyServerBoost"
 	| "ServerBoostActivated"
+	| "RequestDiscoverGamepasses"
+	| "DiscoverGamepassesResult"
 
 local RemoteNames = {
 	Events = {
@@ -48,6 +50,8 @@ local RemoteNames = {
 		BigDonationAnnouncement = "BigDonationAnnouncement", -- server -> client, a donation at/above DonationService.BIG_DONATION_THRESHOLD_ROBUX just happened
 		RequestBuyServerBoost = "RequestBuyServerBoost", -- client -> server, player wants to prompt purchase of the server-wide XP boost Developer Product
 		ServerBoostActivated = "ServerBoostActivated", -- server -> client, someone just bought the server-wide XP boost
+		RequestDiscoverGamepasses = "RequestDiscoverGamepasses", -- client -> server, player wants to auto-list Gamepasses from their own public games instead of pasting IDs
+		DiscoverGamepassesResult = "DiscoverGamepassesResult", -- server -> client, the discovered list (or an error reason)
 	} :: { [string]: string },
 }
 

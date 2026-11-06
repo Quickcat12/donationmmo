@@ -22,6 +22,16 @@ local StandManagerController = {}
 local slotLabels: { [number]: TextLabel } = {}
 local slotInputs: { [number]: TextBox } = {}
 
+local function firstEmptySlot(): number?
+	for slot = 1, MAX_SLOTS do
+		local label = slotLabels[slot]
+		if label and label.Text == `Slot {slot}: empty` then
+			return slot
+		end
+	end
+	return nil
+end
+
 local function getHud(): ScreenGui
 	local playerGui = player:WaitForChild("PlayerGui")
 	return (playerGui:FindFirstChild("HUD") :: ScreenGui?)
@@ -51,12 +61,104 @@ local function showToast(hud: ScreenGui, text: string, color: Color3)
 	end)
 end
 
+type DiscoveredGamepass = { id: number, name: string, price: number }
+
+-- Shows the discovered Gamepasses as a pick list; clicking one fills it into the first
+-- empty slot. Doesn't let a player pick a target slot explicitly - keeping this simple
+-- since most players will have empty slots to fill anyway, and Clear + re-discover covers
+-- the rest.
+local function showDiscoveredPicker(
+	hud: ScreenGui,
+	gamepasses: { DiscoveredGamepass },
+	setEvent: RemoteEvent,
+	getFirstEmptySlot: () -> number?
+)
+	local existing = hud:FindFirstChild("DiscoveredGamepassesPicker")
+	if existing then
+		existing:Destroy()
+	end
+
+	local buttonHeight = 40
+	local spacing = 6
+	local listHeight = math.min(#gamepasses, 6) * (buttonHeight + spacing)
+
+	local picker = UICreate("Frame", {
+		Name = "DiscoveredGamepassesPicker",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(320, 50 + listHeight + 50),
+		BackgroundColor3 = Theme.Panel,
+		Parent = hud,
+	}, {
+		UICreate("UICorner", { CornerRadius = UDim.new(0, 12) }),
+		UICreate("TextLabel", {
+			Size = UDim2.new(1, -20, 0, 30),
+			Position = UDim2.fromOffset(10, 10),
+			BackgroundTransparency = 1,
+			Text = "Pick a Gamepass to link",
+			Font = Theme.Font,
+			TextSize = 16,
+			TextColor3 = Theme.TextPrimary,
+		}),
+	})
+
+	local scroll = UICreate("ScrollingFrame", {
+		Position = UDim2.fromOffset(10, 46),
+		Size = UDim2.new(1, -20, 0, listHeight),
+		BackgroundTransparency = 1,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollBarThickness = 6,
+		Parent = picker,
+	}, {
+		UICreate("UIListLayout", { Padding = UDim.new(0, spacing) }),
+	})
+
+	for _, gamepass in gamepasses do
+		local button = UICreate("TextButton", {
+			Size = UDim2.new(1, 0, 0, buttonHeight),
+			BackgroundColor3 = Theme.PanelLight,
+			Text = `{gamepass.name} - {gamepass.price} R$`,
+			Font = Theme.FontRegular,
+			TextSize = 14,
+			TextColor3 = Theme.TextPrimary,
+			Parent = scroll,
+		}, { UICreate("UICorner", { CornerRadius = UDim.new(0, 8) }) }) :: TextButton
+
+		button.MouseButton1Click:Connect(function()
+			local slot = getFirstEmptySlot()
+			if not slot then
+				showToast(hud, "All 6 slots are full - clear one first.", Theme.Danger)
+				return
+			end
+			setEvent:FireServer(slot, gamepass.id)
+			picker:Destroy()
+		end)
+	end
+
+	local closeButton = UICreate("TextButton", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 1, -40),
+		Size = UDim2.fromOffset(120, 32),
+		BackgroundColor3 = Theme.Background,
+		Text = "Cancel",
+		Font = Theme.FontRegular,
+		TextSize = 14,
+		TextColor3 = Theme.TextSecondary,
+		Parent = picker,
+	}, { UICreate("UICorner", { CornerRadius = UDim.new(0, 8) }) }) :: TextButton
+
+	closeButton.MouseButton1Click:Connect(function()
+		picker:Destroy()
+	end)
+end
+
 local function buildPanel(hud: ScreenGui): Frame
 	local panel = UICreate("Frame", {
 		Name = "StandManagerPanel",
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, -20, 1, -90),
-		Size = UDim2.fromOffset(340, 400),
+		Size = UDim2.fromOffset(340, 448),
 		BackgroundColor3 = Theme.Panel,
 		Visible = false,
 		Parent = hud,
@@ -83,9 +185,21 @@ local function buildPanel(hud: ScreenGui): Frame
 		}),
 	}) :: Frame
 
+	local discoverButton = UICreate("TextButton", {
+		Name = "DiscoverButton",
+		Position = UDim2.fromOffset(10, 72),
+		Size = UDim2.new(1, -20, 0, 32),
+		BackgroundColor3 = Theme.Accent,
+		Text = "Discover My Gamepasses",
+		Font = Theme.FontRegular,
+		TextSize = 13,
+		TextColor3 = Theme.Background,
+		Parent = panel,
+	}, { UICreate("UICorner", { CornerRadius = UDim.new(0, 8) }) }) :: TextButton
+
 	local scroll = UICreate("ScrollingFrame", {
-		Position = UDim2.fromOffset(10, 76),
-		Size = UDim2.new(1, -20, 1, -86),
+		Position = UDim2.fromOffset(10, 114),
+		Size = UDim2.new(1, -20, 1, -124),
 		BackgroundTransparency = 1,
 		CanvasSize = UDim2.new(0, 0, 0, 0),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -96,6 +210,23 @@ local function buildPanel(hud: ScreenGui): Frame
 	})
 
 	local setEvent = Net.get(RemoteNames.Events.RequestSetDonationGamepass)
+	local discoverEvent = Net.get(RemoteNames.Events.RequestDiscoverGamepasses)
+
+	discoverButton.MouseButton1Click:Connect(function()
+		discoverButton.Text = "Searching..."
+		discoverEvent:FireServer()
+	end)
+
+	Net.get(RemoteNames.Events.DiscoverGamepassesResult).OnClientEvent:Connect(function(result)
+		discoverButton.Text = "Discover My Gamepasses"
+
+		if not result.success then
+			showToast(hud, result.reason or "Couldn't discover Gamepasses.", Theme.Danger)
+			return
+		end
+
+		showDiscoveredPicker(hud, result.gamepasses, setEvent, firstEmptySlot)
+	end)
 
 	for slot = 1, MAX_SLOTS do
 		local row = UICreate("Frame", {

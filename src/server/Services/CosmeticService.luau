@@ -9,7 +9,6 @@
 --     default Roblox nameplate so the rank color is always visible above a player's head
 --   - Broadcasts a server-wide announcement when a high-enough rank joins
 
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
