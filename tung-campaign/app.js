@@ -115,7 +115,7 @@
     en.target.classList.add('in');
     io.unobserve(en.target);
   }), { threshold: .15 });
-  $$('.reveal,.reveal-left,.reveal-right,.final,.tcard').forEach(el => io.observe(el));
+  $$('.reveal,.reveal-left,.reveal-right,.final,.tcard,.contrast').forEach(el => io.observe(el));
   // stagger
   $$('.cards .flip, .tgrid .tcard').forEach((el, i) => el.style.transitionDelay = (i % 3) * 0.12 + 's');
 
@@ -149,12 +149,12 @@
   lio.observe(lt);
 
   /* ---------- Scary section ---------- */
-  const scary = $('#scary');
-  $$('.scary-line').forEach(l => l.style.transitionDelay = (l.dataset.delay * 0.9) + 's');
+  const scary = $('#attack');
+  $$('.scary-line').forEach(l => l.style.transitionDelay = (l.dataset.delay * 1.1) + 's');
   const sio = new IntersectionObserver(es => {
     if (!es[0].isIntersecting) return;
     scary.classList.add('on'); sio.disconnect();
-    [1.9, 2.5, 3.1].forEach(d => setTimeout(() => tung(.6), d * 1000));
+    [8.0, 8.6, 9.2].forEach(d => setTimeout(() => tung(.6), d * 1000));
   }, { threshold: .35 });
   sio.observe(scary);
 
@@ -164,6 +164,28 @@
   /* ---------- Endorsement rotator ---------- */
   const qs = $$('#quotes blockquote'); let qi = 0;
   setInterval(() => { qs[qi].classList.remove('active'); qi = (qi + 1) % qs.length; qs[qi].classList.add('active'); }, 3200);
+
+  /* ---------- Happy campaign music (Transfer) ---------- */
+  $('#anthem').addEventListener('click', e => {
+    try {
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      const notes = [523, 659, 784, 1047, 0, 784, 1047, 0, 880, 784, 659, 784, 1047];
+      const durs  = [.18, .18, .18, .45, .05, .18, .5, .1, .2, .2, .2, .2, .7];
+      let t = ctx.currentTime + .05;
+      notes.forEach((f, i) => {
+        if (f) {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.type = 'triangle'; o.frequency.value = f;
+          g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.35, t + .02);
+          g.gain.exponentialRampToValueAtTime(.0001, t + durs[i] * .95);
+          o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + durs[i]);
+        }
+        t += durs[i];
+      });
+    } catch {}
+    const r = e.currentTarget.getBoundingClientRect();
+    confetti(120, r.left + r.width / 2, r.top, true);
+  });
 
   /* ---------- Debate ---------- */
   const script = [
